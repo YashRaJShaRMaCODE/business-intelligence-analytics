@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Cinerate Movies</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 40px;
+            background-color: #f7f7f7;
+        }
+
+        h1 {
+            text-align: center;
+        }
+
+        form {
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        input[type="text"] {
+            padding: 8px;
+            margin: 0 5px;
+            width: 200px;
+        }
+
+        button {
+            padding: 8px 16px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: white;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+
+        th, td {
+            padding: 12px;
+            border: 1px solid #ccc;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+
+        tr:hover {
+            background-color: #f9f9f9;
+        }
+
+        .no-results {
+            text-align: center;
+            margin-top: 20px;
+            color: gray;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🎬 Cinerate Movies</h1>
+
+    <form method="get" action="/">
+        <input type="text" name="search" placeholder="Search title/description" value="{{ search }}">
+        <input type="text" name="genre" placeholder="Genre (e.g. Drama)" value="{{ genre }}">
+        <input type="text" name="year" placeholder="Year (e.g. 2020)" value="{{ year }}">
+        <button type="submit">Filter</button>
+    </form>
+
+    {% if movies %}
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Title</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for movie in movies %}
+                <tr>
+                    <td>{{ movie.id }}</td>
+                    <td>{{ movie.title }}</td>
+                    <td>{{ movie.description }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="no-results">No movies found.</p>
+    {% endif %}
+
+</body>
+</html>
