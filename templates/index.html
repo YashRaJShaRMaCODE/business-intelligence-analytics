@@ -1,94 +1,101 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="en">
 <head>
-    <title>Cinerate Movies</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            padding: 40px;
-            background-color: #f7f7f7;
-        }
-
-        h1 {
-            text-align: center;
-        }
-
-        form {
-            margin-bottom: 30px;
-            text-align: center;
-        }
-
-        input[type="text"] {
-            padding: 8px;
-            margin: 0 5px;
-            width: 200px;
-        }
-
-        button {
-            padding: 8px 16px;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            background-color: white;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-        }
-
-        th, td {
-            padding: 12px;
-            border: 1px solid #ccc;
-            text-align: left;
-        }
-
-        th {
-            background-color: #f2f2f2;
-        }
-
-        tr:hover {
-            background-color: #f9f9f9;
-        }
-
-        .no-results {
-            text-align: center;
-            margin-top: 20px;
-            color: gray;
-        }
-    </style>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Explore ratings, genres and release years across a streaming catalog dataset.">
+    <title>Catalog Index — ScreenScope</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
+    <header class="masthead">
+        <a class="wordmark" href="/" aria-label="ScreenScope home"><span class="mark">S</span> ScreenScope</a>
+        <span class="source-note">Streaming catalog · public dataset</span>
+    </header>
 
-    <h1>🎬 Cinerate Movies</h1>
+    <main>
+        <section class="opening" aria-labelledby="page-title">
+            <div class="opening-copy">
+                <p class="eyebrow">Catalog / 01</p>
+                <h1 id="page-title">A closer read<br>of the screen.</h1>
+                <p class="lede">Browse the catalog by title, genre, year and audience rating. Every result comes from the bundled dataset.</p>
+            </div>
+            <aside class="dataset-note">
+                <span class="note-dot" aria-hidden="true"></span>
+                <p>This is an independent data project, not an official streaming-service catalog.</p>
+            </aside>
+        </section>
 
-    <form method="get" action="/">
-        <input type="text" name="search" placeholder="Search title/description" value="{{ search }}">
-        <input type="text" name="genre" placeholder="Genre (e.g. Drama)" value="{{ genre }}">
-        <input type="text" name="year" placeholder="Year (e.g. 2020)" value="{{ year }}">
-        <button type="submit">Filter</button>
-    </form>
+        <section class="measures" aria-label="Catalog overview">
+            <div class="measure measure-primary"><strong>{{ "{:,}".format(stats.titles) }}</strong><span>titles indexed</span></div>
+            <div class="measure"><strong>{{ stats.average_score if stats.average_score is not none else "—" }}</strong><span>average IMDb score</span></div>
+            <div class="measure"><strong>{{ stats.years }}</strong><span>release years covered</span></div>
+        </section>
 
-    {% if movies %}
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Title</th>
-                    <th>Description</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for movie in movies %}
-                <tr>
-                    <td>{{ movie.id }}</td>
-                    <td>{{ movie.title }}</td>
-                    <td>{{ movie.description }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    {% else %}
-        <p class="no-results">No movies found.</p>
-    {% endif %}
+        <section class="explorer" aria-labelledby="explorer-title">
+            <div class="explorer-heading">
+                <div>
+                    <p class="eyebrow">Explore the archive</p>
+                    <h2 id="explorer-title">Find a title</h2>
+                </div>
+                <p class="result-count">{{ "{:,}".format(total) }} results</p>
+            </div>
+            <form class="filters" method="get" action="/">
+                <label class="search-field">Title or description
+                    <input type="search" name="search" maxlength="100" value="{{ search }}" placeholder="Try a title, actor or phrase">
+                </label>
+                <label>Genre
+                    <input type="text" name="genre" maxlength="40" value="{{ genre }}" placeholder="e.g. drama">
+                </label>
+                <label>Release year
+                    <input type="number" name="year" min="1888" max="2100" value="{{ year }}" placeholder="2020">
+                </label>
+                <label>Format
+                    <select name="type">
+                        <option value="">All titles</option>
+                        <option value="MOVIE" {% if media_type == 'MOVIE' %}selected{% endif %}>Movies</option>
+                        <option value="SHOW" {% if media_type == 'SHOW' %}selected{% endif %}>Shows</option>
+                    </select>
+                </label>
+                <button type="submit">Apply filters</button>
+                {% if search or genre or year or media_type %}<a class="clear-link" href="/">Clear</a>{% endif %}
+            </form>
 
+            {% if titles %}
+                <div class="results-grid">
+                    {% for title in titles %}
+                    <article class="title-card">
+                        <div class="card-meta">
+                            <span>{{ title.media_type|title }}</span>
+                            <span>{{ title.release_year or "Year unknown" }}</span>
+                            {% if title.age_certification %}<span>{{ title.age_certification }}</span>{% endif %}
+                        </div>
+                        <h3>{{ title.title }}</h3>
+                        <p class="description">{{ title.description or "No description available." }}</p>
+                        <div class="card-footer">
+                            <span class="genre">{{ title.genres|replace("[", "")|replace("]", "")|replace("'", "") or "Unclassified" }}</span>
+                            <span class="rating" aria-label="IMDb score {{ title.imdb_score if title.imdb_score is not none else 'not available' }}">
+                                <span aria-hidden="true">IMDb</span> {{ "%.1f"|format(title.imdb_score) if title.imdb_score is not none else "—" }}
+                            </span>
+                        </div>
+                    </article>
+                    {% endfor %}
+                </div>
+                <nav class="pagination" aria-label="Result pages">
+                    <span>Page {{ page }} of {{ pages }}</span>
+                    {% if page > 1 %}<a href="{{ url_for('index', search=search, genre=genre, year=year, type=media_type, page=page-1) }}">Previous</a>{% endif %}
+                    {% if page < pages %}<a href="{{ url_for('index', search=search, genre=genre, year=year, type=media_type, page=page+1) }}">Next</a>{% endif %}
+                </nav>
+            {% else %}
+                <div class="empty-state">
+                    <span class="empty-mark" aria-hidden="true">∅</span>
+                    <h3>No titles match those filters</h3>
+                    <p>Try a broader search or remove one of the filters.</p>
+                    <a href="/">Show the full catalog</a>
+                </div>
+            {% endif %}
+        </section>
+    </main>
+    <footer><span>ScreenScope</span><span>Explore with context.</span></footer>
 </body>
 </html>
