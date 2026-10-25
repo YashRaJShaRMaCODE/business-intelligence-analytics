@@ -46,7 +46,10 @@ button { height: 42px; padding: 0 17px; border: 0; border-radius: var(--radius);
 button:hover { background: #17354a; }
 .clear-link { align-self: center; padding: 10px 0; color: var(--cyan); font-size: .86rem; }
 .results-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
-.title-card { min-height: 235px; display: flex; flex-direction: column; padding: 19px 20px 16px; border: 1px solid var(--line); border-top: 3px solid var(--blue); background: var(--panel); }
+.title-card { min-height: 235px; display: flex; flex-direction: column; padding: 19px 20px 16px; border: 1px solid var(--line); border-top: 3px solid var(--blue); background: var(--panel); animation: card-arrive .42s both; transition: transform .2s ease, box-shadow .2s ease; }
+.title-card:hover { transform: translateY(-3px); box-shadow: 0 12px 28px #172b3a12; }
+.title-card:nth-child(3n+2) { animation-delay: 55ms; }
+.title-card:nth-child(3n) { animation-delay: 110ms; }
 .title-card:nth-child(3n+2) { border-top-color: var(--cyan); }
 .title-card:nth-child(3n) { border-top-color: var(--gold); }
 .card-meta { display: flex; flex-wrap: wrap; gap: 7px 12px; color: var(--muted); font-size: .69rem; }
@@ -87,5 +90,6 @@ footer { display: flex; justify-content: space-between; padding: 18px 0 28px; bo
     .title-card { min-height: 210px; }
 }
 @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after { scroll-behavior: auto !important; }
+    *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+@keyframes card-arrive { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
