@@ -1,63 +1,21 @@
+import ast
 import csv
+import io
 import math
-import sqlite3
-from contextlib import closing
+import os
+from collections import Counter
 from pathlib import Path
 
-from flask import Flask, render_template, request
-
+from flask import Flask, render_template, send_file
 
 ROOT = Path(__file__).resolve().parent
 DATASET = ROOT / "data" / "titles.csv.csv"
-PAGE_SIZE = 24
-
-
-def database_path():
-    return ROOT / "instance" / "catalog.sqlite3"
-
-
-def init_catalog(database, source):
-    source = Path(source)
-    stamp = f"{source.stat().st_size}:{source.stat().st_mtime_ns}"
-    database = Path(database)
-    database.parent.mkdir(parents=True, exist_ok=True)
-    with closing(sqlite3.connect(database)) as conn:
-        conn.execute("""CREATE TABLE IF NOT EXISTS titles (
-            id TEXT PRIMARY KEY, title TEXT NOT NULL, media_type TEXT NOT NULL,
-            description TEXT NOT NULL DEFAULT '', release_year INTEGER,
-            age_certification TEXT, runtime INTEGER, genres TEXT,
-            production_countries TEXT, seasons INTEGER,
-            imdb_score REAL, tmdb_score REAL
-        )""")
-        conn.execute("CREATE TABLE IF NOT EXISTS catalog_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
-        loaded = conn.execute("SELECT value FROM catalog_meta WHERE key='source_stamp'").fetchone()
-        if loaded and loaded[0] == stamp:
-            return
-
-        with source.open(encoding="latin1", newline="") as file:
-            rows = []
-            for row in csv.DictReader(file):
-                rows.append((
-                    row["id"], row["title"], row["type"].upper(), row.get("description") or "",
-                    _integer(row.get("release_year")), row.get("age_certification") or "",
-                    _integer(row.get("runtime")), row.get("genres") or "",
-                    row.get("production_countries") or "", _integer(row.get("seasons")),
-                    _number(row.get("imdb_score")), _number(row.get("tmdb_score")),
-                ))
-
-        with conn:
-            conn.execute("DELETE FROM titles")
-            conn.executemany("""INSERT INTO titles VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", rows)
-            conn.execute("INSERT OR REPLACE INTO catalog_meta VALUES ('source_stamp', ?)", (stamp,))
-            conn.execute("CREATE INDEX IF NOT EXISTS titles_type_year ON titles(media_type, release_year)")
-            conn.execute("CREATE INDEX IF NOT EXISTS titles_rating ON titles(imdb_score)")
-
-
-def _integer(value):
-    try:
-        return int(value) if value not in (None, "") else None
-    except (TypeError, ValueError):
-        return None
+FIELDS = (
+    "id", "title", "type", "description", "release_year", "age_certification",
+    "runtime", "genres", "production_countries", "seasons", "imdb_id",
+    "imdb_score", "imdb_votes", "tmdb_popularity", "tmdb_score",
+)
+SCORE_FIELDS = ("imdb_score", "tmdb_score")
 
 
 def _number(value):
@@ -68,83 +26,117 @@ def _number(value):
         return None
 
 
+def _genres(value):
+    try:
+        parsed = ast.literal_eval(value) if value else []
+    except (ValueError, SyntaxError):
+        parsed = []
+    if not isinstance(parsed, (list, tuple)):
+        return []
+    return sorted({str(item).strip().casefold() for item in parsed if str(item).strip()})
+
+
+def _read_dataset(path):
+    with Path(path).open(encoding="latin1", newline="") as source:
+        reader = csv.DictReader(source)
+        if not reader.fieldnames or not set(FIELDS).issubset(reader.fieldnames):
+            raise ValueError("The catalog file is missing required columns.")
+        return list(reader)
+
+
+def _profile(rows):
+    count = len(rows)
+    missing = {field: sum(not (row.get(field) or "").strip() for row in rows) for field in FIELDS}
+    years = [int(row["release_year"]) for row in rows if (row.get("release_year") or "").isdigit()]
+    ratings = [_number(row.get("imdb_score")) for row in rows]
+    ratings = [score for score in ratings if score is not None]
+    duplicate_ids = count - len({(row.get("id") or "").strip() for row in rows})
+    names = Counter(
+        ((row.get("title") or "").strip().casefold(), (row.get("type") or "").strip().upper(), (row.get("release_year") or "").strip())
+        for row in rows if (row.get("title") or "").strip()
+    )
+    possible_duplicates = sum(total - 1 for total in names.values() if total > 1)
+    genre_counts = Counter(genre for row in rows for genre in _genres(row.get("genres", "")))
+    year_counts = Counter(year // 10 * 10 for year in years)
+    quality = round(100 * sum(count - missing[field] for field in FIELDS) / (count * len(FIELDS))) if count else 0
+    return {
+        "count": count,
+        "quality": quality,
+        "missing": missing,
+        "missing_total": sum(missing.values()),
+        "duplicate_ids": duplicate_ids,
+        "possible_duplicates": possible_duplicates,
+        "years": years,
+        "year_min": min(years, default=None),
+        "year_max": max(years, default=None),
+        "average_imdb": round(sum(ratings) / len(ratings), 1) if ratings else None,
+        "rated_count": len(ratings),
+        "types": Counter((row.get("type") or "Unknown").upper() for row in rows),
+        "genres": genre_counts.most_common(8),
+        "decades": sorted(year_counts.items()),
+        "columns": len(FIELDS),
+    }
+
+
+def _clean_row(row):
+    cleaned = {field: (row.get(field) or "").strip() for field in FIELDS}
+    cleaned["title"] = " ".join(cleaned["title"].split())
+    cleaned["type"] = cleaned["type"].upper()
+    cleaned["genres"] = "; ".join(_genres(cleaned["genres"]))
+    for field in ("release_year", "runtime", "seasons", "imdb_votes"):
+        value = cleaned[field]
+        cleaned[field] = str(int(value)) if value.isdigit() else ""
+    for field in SCORE_FIELDS + ("tmdb_popularity",):
+        value = _number(cleaned[field])
+        cleaned[field] = str(value) if value is not None else ""
+    for field in ("title", "description", "age_certification", "genres", "production_countries", "imdb_id"):
+        if cleaned[field].lstrip().startswith(("=", "+", "-", "@", "\t", "\r")):
+            cleaned[field] = "'" + cleaned[field]
+    return cleaned
+
+
 def create_app(test_config=None):
     app = Flask(__name__)
-    app.config.from_mapping(
-        DATABASE=str(database_path()),
-        TITLES_CSV=str(DATASET),
-        MAX_CONTENT_LENGTH=1024 * 1024,
-    )
+    app.config.from_mapping(TITLES_CSV=str(DATASET), MAX_CONTENT_LENGTH=1024 * 1024)
     if test_config:
         app.config.update(test_config)
-    init_catalog(app.config["DATABASE"], app.config["TITLES_CSV"])
+    rows = _read_dataset(app.config["TITLES_CSV"])
+    profile = _profile(rows)
 
     @app.after_request
     def security_headers(response):
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("X-Frame-Options", "DENY")
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
-        response.headers.setdefault(
-            "Content-Security-Policy",
-            "default-src 'self'; style-src 'self'; img-src 'self' data:; "
-            "base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
-        )
+        response.headers.setdefault("Content-Security-Policy", "default-src 'self'; style-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
         return response
 
     @app.get("/")
     def index():
-        search = request.args.get("search", "").strip()[:100]
-        genre = request.args.get("genre", "").strip()[:40]
-        media_type = request.args.get("type", "").upper()
-        if media_type not in {"MOVIE", "SHOW"}:
-            media_type = ""
-        year_text = request.args.get("year", "").strip()
-        year = _integer(year_text)
-        if year is None or not 1888 <= year <= 2100:
-            year = None
-            year_text = ""
-
-        where, params = [], []
-        if search:
-            escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            where.append("(title LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\')")
-            params.extend((f"%{escaped}%", f"%{escaped}%"))
-        if genre:
-            where.append("genres LIKE ?")
-            params.append(f"%{genre}%")
-        if media_type:
-            where.append("media_type = ?")
-            params.append(media_type)
-        if year is not None:
-            where.append("release_year = ?")
-            params.append(year)
-        clause = f"WHERE {' AND '.join(where)}" if where else ""
-
-        with closing(sqlite3.connect(app.config["DATABASE"])) as conn:
-            conn.row_factory = sqlite3.Row
-            total = conn.execute(f"SELECT COUNT(*) FROM titles {clause}", params).fetchone()[0]
-            stats = conn.execute("""SELECT COUNT(*) AS titles,
-                ROUND(AVG(imdb_score), 1) AS average_score,
-                COUNT(DISTINCT release_year) AS years
-                FROM titles""").fetchone()
-            pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
-            try:
-                page = max(1, int(request.args.get("page", "1")))
-            except ValueError:
-                page = 1
-            page = min(page, pages)
-            offset = (page - 1) * PAGE_SIZE
-            titles = conn.execute(f"""SELECT id, title, media_type, description, release_year,
-                age_certification, runtime, genres, imdb_score, tmdb_score, seasons
-                FROM titles {clause}
-                ORDER BY imdb_score IS NULL, imdb_score DESC, release_year DESC, title COLLATE NOCASE
-                LIMIT ? OFFSET ?""", (*params, PAGE_SIZE, offset)).fetchall()
-
+        type_total = sum(profile["types"].values()) or 1
+        max_genre = max((value for _, value in profile["genres"]), default=1)
+        max_decade = max((value for _, value in profile["decades"]), default=1)
         return render_template(
-            "index.html", titles=titles, stats=stats, search=search, genre=genre,
-            media_type=media_type, year=year_text, page=page, pages=pages,
-            total=total, page_size=PAGE_SIZE,
+            "index.html", profile=profile, type_total=type_total,
+            max_genre=max_genre, max_decade=max_decade,
+            critical_missing=sorted(profile["missing"].items(), key=lambda item: item[1], reverse=True)[:6],
         )
+
+    @app.get("/download/clean.csv")
+    def download_clean():
+        cleaned = (_clean_row(row) for row in rows if (row.get("title") or "").strip())
+        output = io.StringIO(newline="")
+        writer = csv.DictWriter(output, fieldnames=FIELDS, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(cleaned)
+        return send_file(
+            io.BytesIO(output.getvalue().encode("utf-8-sig")),
+            mimetype="text/csv", as_attachment=True, download_name="catalog-quality-clean.csv",
+        )
+
+    @app.get("/healthz")
+    def healthz():
+        return {"status": "ok", "records": profile["count"]}
 
     return app
 
@@ -152,6 +144,4 @@ def create_app(test_config=None):
 app = create_app()
 
 if __name__ == "__main__":
-    import os
-
-    app.run(host="127.0.0.1", port=int(os.getenv("PORT", "5000")), debug=False)
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")), debug=False)

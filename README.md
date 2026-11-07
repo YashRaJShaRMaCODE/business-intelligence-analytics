@@ -1,8 +1,16 @@
-# ScreenScope: streaming catalog analytics
+# Catalog Quality Lab
 
-A small, local catalog explorer for the bundled titles dataset. Search titles and descriptions, filter by genre, release year and format, and browse IMDb ratings in a paginated view.
+A small, deployable data quality dashboard for the bundled Netflix titles dataset. It profiles record completeness, flags possible duplicate keys, summarizes genre and release year coverage, and exports a normalized CSV for follow-on analysis.
 
-This is an independent analysis project. The dataset does not represent a live streaming service catalog and ScreenScope is not affiliated with a streaming provider.
+This is an independent portfolio project. It does not connect to Netflix or another streaming service, and it does not report current availability or viewing behavior.
+
+## What it does
+
+- Profiles the 15 source fields and shows how many cells are blank.
+- Breaks down movies, shows, genre tags, release decades, and IMDb rating coverage.
+- Flags blank titles, repeated IDs, and repeated normalized title/type/year keys for human review.
+- Downloads a UTF-8 cleaned CSV. Rows with no title are excluded; genre tags are normalized; missing values remain blank; spreadsheet formula prefixes are escaped. Similar-title records are never silently removed.
+- Serves a lightweight `/healthz` endpoint for deployment checks.
 
 ## Run locally
 
@@ -15,21 +23,33 @@ python -m pip install -r requirements.txt
 python app.py
 ```
 
-Open `http://127.0.0.1:5000`. On first start, ScreenScope imports `data/titles.csv.csv` into an ignored SQLite cache under `instance/`. The cache refreshes when the source CSV changes. No MySQL server, database account, API key or external asset host is needed.
+Open `http://127.0.0.1:5000`. Set `PORT` to change the listening port. The app reads the checked-in CSV at startup and does not require a database, account, API key, or external asset host.
 
-## Tests
+## Routes
+
+- `/` — dataset quality dashboard
+- `/download/clean.csv` — cleaned CSV attachment
+- `/healthz` — JSON health status and loaded record count
+
+## Checks
 
 ```powershell
 python -m unittest discover -s tests
 python -m compileall -q app.py tests
 ```
 
-The tests use a temporary CSV and SQLite database; they do not access the network or alter the bundled dataset.
+The tests use a temporary fixture CSV and do not modify the bundled dataset.
 
-## Dataset fields
+## Data notes
 
-The explorer uses title, format, description, release year, certification, runtime, genres and IMDb/TMDb scores. `data/credits.csv.csv` and the SQL analysis folder are retained as source material; cast/crew exploration is not implemented in the web app yet.
+The repository includes titles and credits CSVs plus SQL analysis material. The dashboard uses the titles CSV only. The source file has 5,850 rows and includes title/type, descriptions, year, genres, countries, certification, runtime, seasons, and IMDb/TMDb fields. Its recorded years span 1945–2022. Figures are computed from the checked-in snapshot, not a live feed. The data source and its terms should be checked before redistribution of the raw files; this project license does not claim ownership of the dataset.
 
-## Current scope
+## Deployment
 
-This repository is a local analytics prototype. It does not provide streaming recommendations, subscriber demographics, live platform data, authentication, or a hosted production service. The age-risk model scripts that were previously mixed into this folder belong to the separate AgeWell project and have been removed from this repository.
+The Flask app binds to `0.0.0.0` and reads the host-provided `PORT`, so it can run on a standard Python web host. A production server command is:
+
+```text
+gunicorn app:app
+```
+
+The runtime dependency is listed in `requirements.txt`.
