@@ -138,7 +138,8 @@ def _matching_reviews(rows, query, flag):
 
 
 def create_app(test_config=None):
-    app = Flask(__name__)
+    static_folder = None if os.environ.get("VERCEL") else str(ROOT / "public" / "static")
+    app = Flask(__name__, static_folder=static_folder, static_url_path="/static")
     app.config.from_mapping(TITLES_CSV=str(DATASET), MAX_CONTENT_LENGTH=1024 * 1024)
     if test_config:
         app.config.update(test_config)

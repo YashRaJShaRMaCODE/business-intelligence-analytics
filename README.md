@@ -55,3 +55,5 @@ gunicorn app:app
 ```
 
 The runtime dependency is listed in `requirements.txt`.
+
+Static files live in `public/static/` so Vercel can serve them directly at `/static/`; local and Render runs use the same files through Flask. `render.yaml` keeps the Render Blueprint configuration available.

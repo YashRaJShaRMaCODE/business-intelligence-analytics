@@ -3,6 +3,7 @@ import io
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from app import _profile, create_app
 
@@ -60,6 +61,15 @@ class QualityLabTests(unittest.TestCase):
         response = self.client.get("/healthz")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json, {"records": 5, "status": "ok"})
+
+    def test_vercel_uses_public_asset_paths_without_flask_static_route(self):
+        with patch.dict("os.environ", {"VERCEL": "1"}):
+            app = create_app({"TESTING": True, "TITLES_CSV": str(self.titles)})
+        response = app.test_client().get("/")
+        endpoints = {rule.endpoint for rule in app.url_map.iter_rules()}
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'href="/static/styles.css"', response.data)
+        self.assertNotIn("static", endpoints)
 
     def test_review_queue_filters_and_exports_matching_rows(self):
         self.rows[2]["id"] = "one"
