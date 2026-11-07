@@ -1,4 +1,5 @@
 import csv
+import io
 import tempfile
 import unittest
 from pathlib import Path
@@ -6,71 +7,59 @@ from pathlib import Path
 from app import create_app
 
 
-class CatalogTests(unittest.TestCase):
+class QualityLabTests(unittest.TestCase):
     def setUp(self):
-        scratch = Path(__file__).resolve().parents[1] / "instance" / "test-tmp"
-        scratch.mkdir(parents=True, exist_ok=True)
-        self.temp = tempfile.TemporaryDirectory(dir=scratch)
-        root = Path(self.temp.name)
-        self.database = root / "catalog.sqlite3"
-        self.titles = root / "titles.csv"
-        fields = ["id", "title", "type", "description", "release_year", "age_certification",
-                  "runtime", "genres", "production_countries", "seasons", "imdb_score", "tmdb_score"]
-        rows = [{
-            "id": "movie-1", "title": "Sea of Stories", "type": "MOVIE", "description": "A comedy by the sea",
-            "release_year": "2020", "age_certification": "PG-13", "runtime": "98", "genres": "['comedy']",
-            "production_countries": "['US']", "seasons": "", "imdb_score": "8.2", "tmdb_score": "7.8",
-        }, {
-            "id": "show-1", "title": "Sea Archive", "type": "SHOW", "description": "A documentary series",
-            "release_year": "2020", "age_certification": "TV-14", "runtime": "42", "genres": "['documentation']",
-            "production_countries": "['GB']", "seasons": "2", "imdb_score": "7.1", "tmdb_score": "7.0",
-        }, {
-            "id": "xss-1", "title": "<script>alert(1)</script>", "type": "MOVIE", "description": "A drama",
-            "release_year": "2019", "age_certification": "R", "runtime": "90", "genres": "['drama']",
-            "production_countries": "['CA']", "seasons": "", "imdb_score": "", "tmdb_score": "",
-        }]
-        for index in range(27):
-            rows.append({**rows[0], "id": f"extra-{index}", "title": f"Extra Title {index}", "release_year": "2001"})
+        self.temp = tempfile.TemporaryDirectory()
+        self.titles = Path(self.temp.name) / "titles.csv"
+        self.fields = [
+            "id", "title", "type", "description", "release_year", "age_certification",
+            "runtime", "genres", "production_countries", "seasons", "imdb_id",
+            "imdb_score", "imdb_votes", "tmdb_popularity", "tmdb_score",
+        ]
+        self.rows = [
+            {"id": "one", "title": "Sea of Stories", "type": "MOVIE", "release_year": "2020", "genres": "['Comedy', 'Drama']", "imdb_score": "8.2"},
+            {"id": "two", "title": "Sea Archive", "type": "SHOW", "release_year": "2020", "genres": "['documentation']", "seasons": "2", "imdb_score": "7.1"},
+            {"id": "three", "title": "Sea of Stories", "type": "MOVIE", "release_year": "2020", "genres": "['Comedy']", "imdb_score": ""},
+            {"id": "four", "title": "", "type": "MOVIE", "release_year": "2019", "imdb_score": "bad"},
+            {"id": "five", "title": "=2+2", "type": "MOVIE", "release_year": "2022", "genres": "not a list", "imdb_score": "6"},
+        ]
         with self.titles.open("w", encoding="latin1", newline="") as file:
-            writer = csv.DictWriter(file, fieldnames=fields)
+            writer = csv.DictWriter(file, fieldnames=self.fields)
             writer.writeheader()
-            writer.writerows(rows)
-        self.app = create_app({
-            "TESTING": True,
-            "DATABASE": str(self.database),
-            "TITLES_CSV": str(self.titles),
-        })
+            writer.writerows(self.rows)
+        self.app = create_app({"TESTING": True, "TITLES_CSV": str(self.titles)})
         self.client = self.app.test_client()
 
     def tearDown(self):
         self.temp.cleanup()
 
-    def test_catalog_loads_and_shows_overview(self):
+    def test_dashboard_reports_quality_signals_and_sets_security_headers(self):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
-        self.assertIn(b"<strong>30</strong><span>titles indexed</span>", response.data)
-        self.assertIn(b"Sea of Stories", response.data)
-
-    def test_filters_are_combined_and_parameterized(self):
-        response = self.client.get("/?search=sea&type=show&year=2020&genre=documentation")
-        self.assertEqual(response.status_code, 200)
-        self.assertIn(b"Sea Archive", response.data)
-        self.assertNotIn(b"Sea of Stories", response.data)
-        injection = self.client.get("/?search=%25%27%20OR%201%3D1%20--")
-        self.assertIn(b"No titles match", injection.data)
-
-    def test_pagination_is_bounded_and_keeps_filters(self):
-        response = self.client.get("/?type=movie&page=999")
-        self.assertEqual(response.status_code, 200)
-        self.assertIn(b"Page 2 of 2", response.data)
-        self.assertIn(b'type=MOVIE', response.data)
-
-    def test_template_escapes_catalog_text_and_sets_security_headers(self):
-        response = self.client.get("/?search=script")
-        self.assertIn(b"&lt;script&gt;alert(1)&lt;/script&gt;", response.data)
-        self.assertNotIn(b"<script>alert(1)</script>", response.data)
+        self.assertIn(b"Catalog Quality Lab", response.data)
+        self.assertIn(b"4 titled rows", response.data)
+        self.assertIn(b"1 blank title", response.data)
+        self.assertIn(b"1 possible duplicate keys", response.data)
+        self.assertIn(b"Most tagged genres", response.data)
+        self.assertNotIn(b"style=", response.data)
         self.assertEqual(response.headers["X-Frame-Options"], "DENY")
         self.assertIn("default-src 'self'", response.headers["Content-Security-Policy"])
+
+    def test_clean_download_normalizes_fields_and_excludes_blank_title(self):
+        response = self.client.get("/download/clean.csv")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("attachment", response.headers["Content-Disposition"])
+        self.assertIn("text/csv", response.headers["Content-Type"])
+        rows = list(csv.DictReader(io.StringIO(response.data.decode("utf-8-sig"))))
+        self.assertEqual(len(rows), 4)
+        self.assertEqual(rows[0]["genres"], "comedy; drama")
+        self.assertEqual(rows[-1]["title"], "'=2+2")
+        self.assertEqual(rows[0]["imdb_score"], "8.2")
+
+    def test_health_route_reports_loaded_snapshot(self):
+        response = self.client.get("/healthz")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json, {"records": 5, "status": "ok"})
 
 
 if __name__ == "__main__":

@@ -3,99 +3,97 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Explore ratings, genres and release years across a streaming catalog dataset.">
-    <title>Catalog Index — ScreenScope</title>
+    <meta name="theme-color" content="#101614">
+    <meta name="description" content="A transparent quality audit of a bundled film and television dataset: completeness, duplicates, genre and year coverage.">
+    <title>Catalog Quality Lab — data, with receipts</title>
+    <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
-    <header class="masthead">
-        <a class="wordmark" href="/" aria-label="ScreenScope home"><span class="mark">S</span> ScreenScope</a>
-        <span class="source-note">Streaming catalog · public dataset</span>
+    <header class="topbar">
+        <a class="brand" href="/" aria-label="Catalog Quality Lab home"><span class="brand-icon">CQ</span><span>CATALOG QUALITY LAB<small>OPEN DATA / FIELD NOTES 001</small></span></a>
+        <a class="source-link" href="#method">Method &amp; limits <span aria-hidden="true">↗</span></a>
     </header>
 
     <main>
-        <section class="opening" aria-labelledby="page-title">
-            <div class="opening-copy">
-                <p class="eyebrow">Catalog / 01</p>
-                <h1 id="page-title">A closer read<br>of the screen.</h1>
-                <p class="lede">Browse the catalog by title, genre, year and audience rating. Every result comes from the bundled dataset.</p>
+        <section class="hero">
+            <div class="hero-copy">
+                <p class="eyebrow"><span class="live-dot"></span> DATASET AUDIT <span class="slash">/</span> FILM + TELEVISION</p>
+                <h1>Good data starts<br>with <em>good questions.</em></h1>
+                <p class="intro">A hands-on quality report for a public catalog snapshot. See what is complete, what is missing, and what needs a closer look before anyone builds on it.</p>
+                <a class="download" href="{{ url_for('download_clean') }}">Download cleaned CSV <span aria-hidden="true">↓</span><small>UTF-8 · {{ "{:,}".format(profile.count - profile.missing.title) }} titled rows</small></a>
             </div>
-            <aside class="dataset-note">
-                <span class="note-dot" aria-hidden="true"></span>
-                <p>This is an independent data project, not an official streaming-service catalog.</p>
+            <aside class="hero-aside">
+                <span class="aside-index">01 — THE DATA</span>
+                <div class="quality-badge" role="img" aria-label="{{ profile.quality }} percent field completeness"><span>{{ profile.quality }}<small>%</small></span></div>
+                <p>FIELD COMPLETENESS</p>
+                <small class="aside-caption">{{ "{:,}".format(profile.count * profile.columns - profile.missing_total) }} of {{ "{:,}".format(profile.count * profile.columns) }} cells populated</small>
             </aside>
+            <div class="hero-grid" aria-hidden="true"></div>
         </section>
 
-        <section class="measures" aria-label="Catalog overview">
-            <div class="measure measure-primary"><strong>{{ "{:,}".format(stats.titles) }}</strong><span>titles indexed</span></div>
-            <div class="measure"><strong>{{ stats.average_score if stats.average_score is not none else "—" }}</strong><span>average IMDb score</span></div>
-            <div class="measure"><strong>{{ stats.years }}</strong><span>release years covered</span></div>
+        <section class="metric-strip" aria-label="Dataset at a glance">
+            <article><span class="metric-label">RECORDS</span><strong>{{ "{:,}".format(profile.count) }}</strong><small>rows in source snapshot</small></article>
+            <article><span class="metric-label">FIELDS</span><strong>{{ profile.columns }}</strong><small>tracked per record</small></article>
+            <article><span class="metric-label">IMDB COVERAGE</span><strong>{{ "{:,}".format(profile.rated_count) }}</strong><small>records with a score</small></article>
+            <article><span class="metric-label">YEAR SPAN</span><strong>{{ profile.year_min }}—{{ profile.year_max }}</strong><small>release years in data</small></article>
         </section>
 
-        <section class="explorer" aria-labelledby="explorer-title">
-            <div class="explorer-heading">
-                <div>
-                    <p class="eyebrow">Explore the archive</p>
-                    <h2 id="explorer-title">Find a title</h2>
-                </div>
-                <p class="result-count">{{ "{:,}".format(total) }} results</p>
+        <section class="analysis-section" aria-labelledby="coverage-title">
+            <div class="section-heading"><div><p class="eyebrow">02 / COMPLETENESS</p><h2 id="coverage-title">Every blank has a shape.</h2></div><p>Missing values by field <span>· {{ "{:,}".format(profile.missing_total) }} total</span></p></div>
+            <div class="coverage-panel">
+                {% for field, missing in critical_missing %}
+                <div class="coverage-row"><span class="field-name">{{ field|replace('_', ' ') }}</span><progress class="bar missing" max="{{ profile.count }}" value="{{ missing }}" aria-label="{{ field }}: {{ missing }} missing of {{ profile.count }}"></progress><span class="coverage-value">{{ "%.1f"|format(missing / profile.count * 100) }}<small>%</small></span><span class="coverage-count">{{ "{:,}".format(missing) }} missing</span></div>
+                {% endfor %}
+                <p class="chart-note">Bars show missing share. Empty seasons and certifications are field gaps, not automatically bad records.</p>
             </div>
-            <form class="filters" method="get" action="/">
-                <label class="search-field">Title or description
-                    <input type="search" name="search" maxlength="100" value="{{ search }}" placeholder="Try a title, actor or phrase">
-                </label>
-                <label>Genre
-                    <input type="text" name="genre" maxlength="40" value="{{ genre }}" placeholder="e.g. drama">
-                </label>
-                <label>Release year
-                    <input type="number" name="year" min="1888" max="2100" value="{{ year }}" placeholder="2020">
-                </label>
-                <label>Format
-                    <select name="type">
-                        <option value="">All titles</option>
-                        <option value="MOVIE" {% if media_type == 'MOVIE' %}selected{% endif %}>Movies</option>
-                        <option value="SHOW" {% if media_type == 'SHOW' %}selected{% endif %}>Shows</option>
-                    </select>
-                </label>
-                <button type="submit">Apply filters</button>
-                {% if search or genre or year or media_type %}<a class="clear-link" href="/">Clear</a>{% endif %}
-            </form>
+        </section>
 
-            {% if titles %}
-                <div class="results-grid">
-                    {% for title in titles %}
-                    <article class="title-card">
-                        <div class="card-meta">
-                            <span>{{ title.media_type|title }}</span>
-                            <span>{{ title.release_year or "Year unknown" }}</span>
-                            {% if title.age_certification %}<span>{{ title.age_certification }}</span>{% endif %}
-                        </div>
-                        <h3>{{ title.title }}</h3>
-                        <p class="description">{{ title.description or "No description available." }}</p>
-                        <div class="card-footer">
-                            <span class="genre">{{ title.genres|replace("[", "")|replace("]", "")|replace("'", "") or "Unclassified" }}</span>
-                            <span class="rating" aria-label="IMDb score {{ title.imdb_score if title.imdb_score is not none else 'not available' }}">
-                                <span aria-hidden="true">IMDb</span> {{ "%.1f"|format(title.imdb_score) if title.imdb_score is not none else "—" }}
-                            </span>
-                        </div>
-                    </article>
+        <section class="split-panels" aria-label="Catalog composition and review flags">
+            <article class="analysis-section panel">
+                <div class="section-heading compact"><div><p class="eyebrow">03 / COMPOSITION</p><h2>What is in the file?</h2></div></div>
+                <div class="type-list">
+                    {% for label, total in profile.types.items() %}
+                    <div class="type-row"><span>{{ label|title }}</span><progress class="bar type" max="{{ type_total }}" value="{{ total }}" aria-label="{{ label }}: {{ total }} records"></progress><strong>{{ "{:,}".format(total) }}</strong><small>{{ (total / type_total * 100)|round|int }}%</small></div>
                     {% endfor %}
                 </div>
-                <nav class="pagination" aria-label="Result pages">
-                    <span>Page {{ page }} of {{ pages }}</span>
-                    {% if page > 1 %}<a href="{{ url_for('index', search=search, genre=genre, year=year, type=media_type, page=page-1) }}">Previous</a>{% endif %}
-                    {% if page < pages %}<a href="{{ url_for('index', search=search, genre=genre, year=year, type=media_type, page=page+1) }}">Next</a>{% endif %}
-                </nav>
-            {% else %}
-                <div class="empty-state">
-                    <span class="empty-mark" aria-hidden="true">∅</span>
-                    <h3>No titles match those filters</h3>
-                    <p>Try a broader search or remove one of the filters.</p>
-                    <a href="/">Show the full catalog</a>
+                <div class="chart-divider"></div>
+                <h3>Most tagged genres <span>· multi-label</span></h3>
+                <div class="genre-list">
+                    {% for label, total in profile.genres %}
+                    <div class="genre-row"><span>{{ label }}</span><progress class="bar genre" max="{{ max_genre }}" value="{{ total }}" aria-label="{{ label }}: {{ total }} tags"></progress><strong>{{ "{:,}".format(total) }}</strong></div>
+                    {% endfor %}
                 </div>
-            {% endif %}
+                <p class="chart-note">A title can have multiple genre tags. Values count tags, not unique records.</p>
+            </article>
+
+            <article class="analysis-section panel">
+                <div class="section-heading compact"><div><p class="eyebrow">04 / TIME</p><h2>Release-year coverage.</h2></div></div>
+                <div class="decade-chart" aria-label="Number of records by release decade">
+                    {% for decade, total in profile.decades %}
+                    <div class="decade-row"><span>{{ decade }}s</span><progress class="bar decade" max="{{ max_decade }}" value="{{ total }}" aria-label="{{ decade }}s: {{ total }} records"></progress><strong>{{ "{:,}".format(total) }}</strong></div>
+                    {% endfor %}
+                </div>
+                <p class="chart-note">Counts use the release year provided by the source. No inference is made for missing metadata.</p>
+                <div class="chart-divider"></div>
+                <div class="rating-callout"><span>AVERAGE IMDB SCORE</span><strong>{{ profile.average_imdb if profile.average_imdb is not none else "—" }}<small> / 10</small></strong><p>Calculated only from {{ "{:,}".format(profile.rated_count) }} rows with a score.</p></div>
+            </article>
+        </section>
+
+        <section class="review-section" aria-labelledby="review-title">
+            <div><p class="eyebrow">05 / REVIEW QUEUE</p><h2 id="review-title">Flags for a human pass.</h2><p class="review-intro">Signals identify records worth checking; they do not prove a source error.</p></div>
+            <div class="flag-grid">
+                <article class="flag"><span class="flag-number">A</span><strong>{{ profile.missing['title'] }} blank title</strong><p>Excluded from the cleaned download because a title is needed to identify the row.</p></article>
+                <article class="flag"><span class="flag-number">B</span><strong>{{ profile.duplicate_ids }} repeated IDs</strong><p>Same source ID appears more than once. Review before joining this file to other tables.</p></article>
+                <article class="flag"><span class="flag-number">C</span><strong>{{ profile.possible_duplicates }} possible duplicate keys</strong><p>Repeated normalized title + type + year combinations. Similar titles may still be legitimate.</p></article>
+            </div>
+        </section>
+
+        <section class="method" id="method" aria-labelledby="method-title">
+            <div><p class="eyebrow">06 / METHOD &amp; LIMITS</p><h2 id="method-title">Transparent by design.</h2></div>
+            <div class="method-copy"><p>The app profiles the CSV bundled in this repository at startup. The source snapshot contains {{ "{:,}".format(profile.count) }} movie and television records; it is not a live service catalog, availability feed, or endorsement by Netflix or another platform.</p><p>Completeness is the share of non-empty cells across {{ profile.columns }} source fields. Genre tags are parsed as lists and normalized to lowercase for the chart and export. The download omits rows without a title, normalizes genre separators, and keeps other missing values blank. Possible duplicates are flagged for review, never silently deleted.</p><p class="source-credit">SOURCE: NETFLIX TITLES + CREDITS DATASET SNAPSHOT · REPOSITORY FILES · RATINGS ATTRIBUTED TO IMDB / TMDB IN SOURCE COLUMNS</p></div>
         </section>
     </main>
-    <footer><span>ScreenScope</span><span>Explore with context.</span></footer>
+    <footer><span>CATALOG QUALITY LAB <span class="footer-sep">/</span> PERSONAL DATA PROJECT</span><a href="https://github.com/YashRaJShaRMaCODE/business-intelligence-analytics">SOURCE REPOSITORY ↗</a></footer>
 </body>
 </html>
