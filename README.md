@@ -1,6 +1,6 @@
 # Catalog Quality Lab
 
-A small, deployable data quality dashboard for the bundled Netflix titles dataset. It profiles record completeness, flags possible duplicate keys, summarizes genre and release year coverage, and exports a normalized CSV for follow-on analysis.
+A deployable data quality workbench for the bundled Netflix titles snapshot. It profiles record completeness, surfaces questionable rows in a searchable review queue, and exports normalized data for follow-on analysis.
 
 This is an independent portfolio project. It does not connect to Netflix or another streaming service, and it does not report current availability or viewing behavior.
 
@@ -9,6 +9,7 @@ This is an independent portfolio project. It does not connect to Netflix or anot
 - Profiles the 15 source fields and shows how many cells are blank.
 - Breaks down movies, shows, genre tags, release decades, and IMDb rating coverage.
 - Flags blank titles, repeated IDs, and repeated normalized title/type/year keys for human review.
+- Adds a paged review queue for blank titles, repeated IDs, possible duplicates, malformed years, and out-of-range rating scores. Search by title, ID, type, year, or description; filter by issue and export the matching rows.
 - Downloads a UTF-8 cleaned CSV. Rows with no title are excluded; genre tags are normalized; missing values remain blank; spreadsheet formula prefixes are escaped. Similar-title records are never silently removed.
 - Serves a lightweight `/healthz` endpoint for deployment checks.
 
@@ -29,6 +30,7 @@ Open `http://127.0.0.1:5000`. Set `PORT` to change the listening port. The app r
 
 - `/` — dataset quality dashboard
 - `/download/clean.csv` — cleaned CSV attachment
+- `/download/review.csv` — filtered review queue CSV, including issue labels
 - `/healthz` — JSON health status and loaded record count
 
 ## Checks

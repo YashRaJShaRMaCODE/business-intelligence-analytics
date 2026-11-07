@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from app import create_app
+from app import _profile, create_app
 
 
 class QualityLabTests(unittest.TestCase):
@@ -20,8 +20,8 @@ class QualityLabTests(unittest.TestCase):
             {"id": "one", "title": "Sea of Stories", "type": "MOVIE", "release_year": "2020", "genres": "['Comedy', 'Drama']", "imdb_score": "8.2"},
             {"id": "two", "title": "Sea Archive", "type": "SHOW", "release_year": "2020", "genres": "['documentation']", "seasons": "2", "imdb_score": "7.1"},
             {"id": "three", "title": "Sea of Stories", "type": "MOVIE", "release_year": "2020", "genres": "['Comedy']", "imdb_score": ""},
-            {"id": "four", "title": "", "type": "MOVIE", "release_year": "2019", "imdb_score": "bad"},
-            {"id": "five", "title": "=2+2", "type": "MOVIE", "release_year": "2022", "genres": "not a list", "imdb_score": "6"},
+            {"id": "four", "title": "", "type": "MOVIE", "release_year": "bad-year", "imdb_score": "bad"},
+            {"id": "five", "title": "=2+2", "type": "MOVIE", "release_year": "2022", "genres": "not a list", "imdb_score": "6", "tmdb_score": "11.2"},
         ]
         with self.titles.open("w", encoding="latin1", newline="") as file:
             writer = csv.DictWriter(file, fieldnames=self.fields)
@@ -60,6 +60,43 @@ class QualityLabTests(unittest.TestCase):
         response = self.client.get("/healthz")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json, {"records": 5, "status": "ok"})
+
+    def test_review_queue_filters_and_exports_matching_rows(self):
+        self.rows[2]["id"] = "one"
+        with self.titles.open("w", encoding="latin1", newline="") as file:
+            writer = csv.DictWriter(file, fieldnames=self.fields)
+            writer.writeheader()
+            writer.writerows(self.rows)
+        self.app = create_app({"TESTING": True, "TITLES_CSV": str(self.titles)})
+        self.client = self.app.test_client()
+
+        page = self.client.get("/?q=Sea%20of%20Stories&flag=possible_duplicate")
+        self.assertEqual(page.status_code, 200)
+        self.assertIn(b"2 matching records", page.data)
+        self.assertIn(b"Possible duplicate key", page.data)
+        self.assertNotIn(b"Sea Archive", page.data)
+
+        export = self.client.get("/download/review.csv?flag=repeated_id")
+        rows = list(csv.DictReader(io.StringIO(export.data.decode("utf-8-sig"))))
+        self.assertEqual(len(rows), 2)
+        self.assertTrue(all("Repeated source ID" in row["review_flags"] for row in rows))
+
+    def test_review_queue_handles_no_matches_and_invalid_filters(self):
+        empty = self.client.get("/?q=not-a-real-title&flag=invalid_score")
+        self.assertIn(b"No flagged records match those filters", empty.data)
+        safe = self.client.get("/?flag=unknown")
+        self.assertEqual(safe.status_code, 200)
+        self.assertIn(b"All flags", safe.data)
+
+    def test_review_queue_flags_malformed_years_and_rating_ranges(self):
+        year = self.client.get("/?flag=invalid_year")
+        self.assertIn(b"Invalid release year", year.data)
+        score = self.client.get("/?flag=invalid_score")
+        self.assertIn(b"Invalid imdb score", score.data)
+        self.assertIn(b"Invalid tmdb score", score.data)
+
+    def test_blank_source_ids_are_not_counted_as_repeated_ids(self):
+        self.assertEqual(_profile([{"id": "", "title": "One"}, {"id": "", "title": "Two"}])["duplicate_ids"], 0)
 
 
 if __name__ == "__main__":

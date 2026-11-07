@@ -89,8 +89,39 @@
             </div>
         </section>
 
+        <section class="audit-queue" aria-labelledby="queue-title">
+            <div class="queue-heading">
+                <div><p class="eyebrow">06 / RECORD REVIEW</p><h2 id="queue-title">Go from signal to source row.</h2><p>Search the flagged records, narrow the issue type, then export the matching rows for a closer pass.</p></div>
+                <a class="queue-export" href="{{ url_for('download_review', q=review_query, flag=review_flag) }}">Export {{ "{:,}".format(review_total) }} rows</a>
+            </div>
+            <form class="queue-filters" method="get" action="/" role="search">
+                <label>Search records<input type="search" name="q" value="{{ review_query }}" maxlength="100" placeholder="Title, ID, year, or notes"></label>
+                <label>Issue type<select name="flag">
+                    {% for value, label in [("any", "All flags"), ("missing_title", "Blank title"), ("repeated_id", "Repeated source ID"), ("possible_duplicate", "Possible duplicate key"), ("invalid_year", "Invalid release year"), ("invalid_score", "Invalid rating score")] %}
+                    <option value="{{ value }}" {{ "selected" if review_flag == value else "" }}>{{ label }}</option>
+                    {% endfor %}
+                </select></label>
+                <button type="submit">Apply filters</button>
+            </form>
+            <p class="queue-count" role="status">{{ "{:,}".format(review_total) }} matching record{{ "s" if review_total != 1 else "" }} · page {{ review_page }} of {{ review_pages }}</p>
+            {% if review_rows %}
+            <div class="queue-table-wrap" tabindex="0" aria-label="Flagged records; scroll horizontally to see all columns">
+                <table class="queue-table"><thead><tr><th scope="col">Record</th><th scope="col">Source ID</th><th scope="col">Type / year</th><th scope="col">Review flags</th></tr></thead>
+                    <tbody>{% for row in review_rows %}<tr><th scope="row">{{ row.title|trim or "Untitled record" }}</th><td>{{ row.id|trim or "—" }}</td><td>{{ row.type|trim or "—" }} / {{ row.release_year|trim or "—" }}</td><td>{% for issue in row.issues %}<span class="issue-tag">{{ issue }}</span>{% endfor %}</td></tr>{% endfor %}</tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="queue-empty"><strong>No flagged records match those filters.</strong><span>Try another issue type or search term. The source file is unchanged.</span></div>
+            {% endif %}
+            {% if review_pages > 1 %}<nav class="queue-pages" aria-label="Review queue pages">
+                {% if review_page > 1 %}<a href="{{ url_for('index', q=review_query, flag=review_flag, page=review_page - 1) }}">Previous page</a>{% else %}<span></span>{% endif %}
+                <span>{{ review_page }} / {{ review_pages }}</span>
+                {% if review_page < review_pages %}<a href="{{ url_for('index', q=review_query, flag=review_flag, page=review_page + 1) }}">Next page</a>{% else %}<span></span>{% endif %}
+            </nav>{% endif %}
+        </section>
+
         <section class="method" id="method" aria-labelledby="method-title">
-            <div><p class="eyebrow">06 / METHOD &amp; LIMITS</p><h2 id="method-title">Transparent by design.</h2></div>
+            <div><p class="eyebrow">07 / METHOD &amp; LIMITS</p><h2 id="method-title">Transparent by design.</h2></div>
             <div class="method-copy"><p>The app profiles the CSV bundled in this repository at startup. The source snapshot contains {{ "{:,}".format(profile.count) }} movie and television records; it is not a live service catalog, availability feed, or endorsement by Netflix or another platform.</p><p>Completeness is the share of non-empty cells across {{ profile.columns }} source fields. Genre tags are parsed as lists and normalized to lowercase for the chart and export. The download omits rows without a title, normalizes genre separators, and keeps other missing values blank. Possible duplicates are flagged for review, never silently deleted.</p><p class="source-credit">SOURCE: NETFLIX TITLES + CREDITS DATASET SNAPSHOT · REPOSITORY FILES · RATINGS ATTRIBUTED TO IMDB / TMDB IN SOURCE COLUMNS</p></div>
         </section>
     </main>
