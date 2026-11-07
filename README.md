@@ -42,6 +42,7 @@ python -m compileall -q app.py tests
 ```
 
 The tests use a temporary fixture CSV and do not modify the bundled dataset.
+GitHub Actions runs the tests, Python compilation, and a dependency security audit on pushes and pull requests to `main`.
 
 ## Data notes
 
