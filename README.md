@@ -4,6 +4,8 @@ A deployable data quality workbench for the bundled Netflix titles snapshot. It 
 
 This is an independent portfolio project. It does not connect to Netflix or another streaming service, and it does not report current availability or viewing behavior.
 
+**Live dashboard:** <https://catalog-quality-lab.vercel.app/>
+
 ## What it does
 
 - Profiles the 15 source fields and shows how many cells are blank.
@@ -12,6 +14,7 @@ This is an independent portfolio project. It does not connect to Netflix or anot
 - Adds a paged review queue for blank titles, repeated IDs, possible duplicates, malformed years, and out-of-range rating scores. Search by title, ID, type, year, or description; filter by issue and export the matching rows.
 - Downloads a UTF-8 cleaned CSV. Rows with no title are excluded; genre tags are normalized; missing values remain blank; spreadsheet formula prefixes are escaped. Similar-title records are never silently removed.
 - Serves a lightweight `/healthz` endpoint for deployment checks.
+- Publishes a canonical page URL, Open Graph sharing metadata, `robots.txt`, and a one-page sitemap.
 - Adds a restrictive Content Security Policy, browser permission limits, and clickjacking, MIME-sniffing, and referrer protections.
 
 ## Run locally
@@ -33,6 +36,7 @@ Open `http://127.0.0.1:5000`. Set `PORT` to change the listening port. The app r
 - `/download/clean.csv` — cleaned CSV attachment
 - `/download/review.csv` — filtered review queue CSV, including issue labels
 - `/healthz` — JSON health status and loaded record count
+- `/robots.txt` and `/sitemap.xml` — search discovery and canonical URL
 
 ## Checks
 
@@ -58,4 +62,4 @@ gunicorn app:app
 
 The runtime dependency is listed in `requirements.txt`.
 
-Static files live in `public/static/` so Vercel can serve them directly at `/static/`; local and Render runs use the same files through Flask. `render.yaml` keeps the Render Blueprint configuration available.
+Static files live in `public/static/` so Vercel can serve them directly at `/static/`; local and Render runs use the same files through Flask. `render.yaml` keeps the Render Blueprint configuration available. Set `PUBLIC_BASE_URL` only if the canonical production domain changes.

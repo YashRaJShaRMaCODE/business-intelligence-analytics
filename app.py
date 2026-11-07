@@ -5,8 +5,9 @@ import math
 import os
 from collections import Counter
 from pathlib import Path
+from xml.etree.ElementTree import Element, SubElement, tostring
 
-from flask import Flask, render_template, request, send_file
+from flask import Flask, Response, render_template, request, send_file
 
 ROOT = Path(__file__).resolve().parent
 DATASET = ROOT / "data" / "titles.csv.csv"
@@ -140,7 +141,10 @@ def _matching_reviews(rows, query, flag):
 def create_app(test_config=None):
     static_folder = None if os.environ.get("VERCEL") else str(ROOT / "public" / "static")
     app = Flask(__name__, static_folder=static_folder, static_url_path="/static")
-    app.config.from_mapping(TITLES_CSV=str(DATASET), MAX_CONTENT_LENGTH=1024 * 1024)
+    app.config.from_mapping(
+        TITLES_CSV=str(DATASET), MAX_CONTENT_LENGTH=1024 * 1024,
+        PUBLIC_BASE_URL=os.environ.get("PUBLIC_BASE_URL", "https://catalog-quality-lab.vercel.app").rstrip("/"),
+    )
     if test_config:
         app.config.update(test_config)
     rows = _read_dataset(app.config["TITLES_CSV"])
@@ -172,7 +176,20 @@ def create_app(test_config=None):
             critical_missing=sorted(profile["missing"].items(), key=lambda item: item[1], reverse=True)[:6],
             review_rows=matches[(page - 1) * page_size:page * page_size], review_query=query,
             review_flag=flag, review_total=len(matches), review_page=page, review_pages=page_count,
+            public_url=f'{app.config["PUBLIC_BASE_URL"]}/',
         )
+
+    @app.get("/robots.txt")
+    def robots_txt():
+        sitemap_url = f'{app.config["PUBLIC_BASE_URL"]}/sitemap.xml'
+        return Response(f"User-agent: *\nAllow: /\nSitemap: {sitemap_url}\n", mimetype="text/plain")
+
+    @app.get("/sitemap.xml")
+    def sitemap_xml():
+        sitemap = Element("urlset", {"xmlns": "http://www.sitemaps.org/schemas/sitemap/0.9"})
+        entry = SubElement(sitemap, "url")
+        SubElement(entry, "loc").text = f'{app.config["PUBLIC_BASE_URL"]}/'
+        return Response(tostring(sitemap, encoding="utf-8", xml_declaration=True), mimetype="application/xml")
 
     @app.get("/download/clean.csv")
     def download_clean():

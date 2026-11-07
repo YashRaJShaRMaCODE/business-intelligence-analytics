@@ -2,6 +2,7 @@ import csv
 import io
 import tempfile
 import unittest
+from xml.etree import ElementTree
 from pathlib import Path
 from unittest.mock import patch
 
@@ -38,6 +39,8 @@ class QualityLabTests(unittest.TestCase):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Catalog Quality Lab", response.data)
+        self.assertIn(b'rel="canonical" href="https://catalog-quality-lab.vercel.app/"', response.data)
+        self.assertIn(b'property="og:type" content="website"', response.data)
         self.assertIn(b"4 titled rows", response.data)
         self.assertIn(b"1 blank title", response.data)
         self.assertIn(b"1 possible duplicate keys", response.data)
@@ -48,6 +51,15 @@ class QualityLabTests(unittest.TestCase):
         self.assertIn("script-src 'self'", response.headers["Content-Security-Policy"])
         self.assertIn("object-src 'none'", response.headers["Content-Security-Policy"])
         self.assertEqual(response.headers["Permissions-Policy"], "camera=(), microphone=(), geolocation=(), usb=()")
+
+    def test_robots_and_sitemap_point_to_the_canonical_dashboard(self):
+        robots = self.client.get("/robots.txt")
+        self.assertEqual(robots.status_code, 200)
+        self.assertIn(b"Sitemap: https://catalog-quality-lab.vercel.app/sitemap.xml", robots.data)
+        sitemap = self.client.get("/sitemap.xml")
+        self.assertEqual(sitemap.status_code, 200)
+        root = ElementTree.fromstring(sitemap.data)
+        self.assertEqual(root[0][0].text, "https://catalog-quality-lab.vercel.app/")
 
     def test_clean_download_normalizes_fields_and_excludes_blank_title(self):
         response = self.client.get("/download/clean.csv")
