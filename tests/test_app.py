@@ -45,6 +45,9 @@ class QualityLabTests(unittest.TestCase):
         self.assertNotIn(b"style=", response.data)
         self.assertEqual(response.headers["X-Frame-Options"], "DENY")
         self.assertIn("default-src 'self'", response.headers["Content-Security-Policy"])
+        self.assertIn("script-src 'self'", response.headers["Content-Security-Policy"])
+        self.assertIn("object-src 'none'", response.headers["Content-Security-Policy"])
+        self.assertEqual(response.headers["Permissions-Policy"], "camera=(), microphone=(), geolocation=(), usb=()")
 
     def test_clean_download_normalizes_fields_and_excludes_blank_title(self):
         response = self.client.get("/download/clean.csv")

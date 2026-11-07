@@ -12,6 +12,7 @@ This is an independent portfolio project. It does not connect to Netflix or anot
 - Adds a paged review queue for blank titles, repeated IDs, possible duplicates, malformed years, and out-of-range rating scores. Search by title, ID, type, year, or description; filter by issue and export the matching rows.
 - Downloads a UTF-8 cleaned CSV. Rows with no title are excluded; genre tags are normalized; missing values remain blank; spreadsheet formula prefixes are escaped. Similar-title records are never silently removed.
 - Serves a lightweight `/healthz` endpoint for deployment checks.
+- Adds a restrictive Content Security Policy, browser permission limits, and clickjacking, MIME-sniffing, and referrer protections.
 
 ## Run locally
 
