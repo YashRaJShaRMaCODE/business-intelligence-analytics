@@ -60,7 +60,7 @@ def _profile(rows):
     possible_duplicates = sum(total - 1 for total in names.values() if total > 1)
     genre_counts = Counter(genre for row in rows for genre in _genres(row.get("genres", "")))
     year_counts = Counter(year // 10 * 10 for year in years)
-    quality = round(100 * sum(count - missing[field] for field in FIELDS) / (count * len(FIELDS))) if count else 0
+    quality = round(100 * sum(count - missing[field] for field in FIELDS) / (count * len(FIELDS))) if count else None
     return {
         "count": count,
         "quality": quality,

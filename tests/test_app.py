@@ -123,6 +123,19 @@ class QualityLabTests(unittest.TestCase):
     def test_blank_source_ids_are_not_counted_as_repeated_ids(self):
         self.assertEqual(_profile([{"id": "", "title": "One"}, {"id": "", "title": "Two"}])["duplicate_ids"], 0)
 
+    def test_header_only_catalog_renders_empty_metrics_without_dividing_by_zero(self):
+        with self.titles.open("w", encoding="latin1", newline="") as file:
+            csv.DictWriter(file, fieldnames=self.fields).writeheader()
+        app = create_app({"TESTING": True, "TITLES_CSV": str(self.titles)})
+
+        response = app.test_client().get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"No source records to measure", response.data)
+        self.assertIn(b"No source rows to classify yet", response.data)
+        self.assertIn(b"No source rows are available to review", response.data)
+        self.assertIn("—".encode(), response.data)
+
 
 if __name__ == "__main__":
     unittest.main()

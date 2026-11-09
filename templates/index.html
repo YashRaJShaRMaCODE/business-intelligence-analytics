@@ -31,7 +31,7 @@
             </div>
             <aside class="hero-aside">
                 <span class="aside-index">01 — THE DATA</span>
-                <div class="quality-badge" role="img" aria-label="{{ profile.quality }} percent field completeness"><span>{{ profile.quality }}<small>%</small></span></div>
+                <div class="quality-badge" role="img" aria-label="{{ (profile.quality|string ~ ' percent field completeness') if profile.quality is not none else 'No source records to measure' }}"><span>{{ profile.quality if profile.quality is not none else "—" }}{% if profile.quality is not none %}<small>%</small>{% endif %}</span></div>
                 <p>FIELD COMPLETENESS</p>
                 <small class="aside-caption">{{ "{:,}".format(profile.count * profile.columns - profile.missing_total) }} of {{ "{:,}".format(profile.count * profile.columns) }} cells populated</small>
             </aside>
@@ -42,14 +42,14 @@
             <article><span class="metric-label">RECORDS</span><strong>{{ "{:,}".format(profile.count) }}</strong><small>rows in source snapshot</small></article>
             <article><span class="metric-label">FIELDS</span><strong>{{ profile.columns }}</strong><small>tracked per record</small></article>
             <article><span class="metric-label">IMDB COVERAGE</span><strong>{{ "{:,}".format(profile.rated_count) }}</strong><small>records with a score</small></article>
-            <article><span class="metric-label">YEAR SPAN</span><strong>{{ profile.year_min }}—{{ profile.year_max }}</strong><small>release years in data</small></article>
+            <article><span class="metric-label">YEAR SPAN</span><strong>{{ profile.year_min if profile.year_min is not none else "—" }}—{{ profile.year_max if profile.year_max is not none else "—" }}</strong><small>release years in data</small></article>
         </section>
 
         <section class="analysis-section" aria-labelledby="coverage-title">
             <div class="section-heading"><div><p class="eyebrow">02 / COMPLETENESS</p><h2 id="coverage-title">Every blank has a shape.</h2></div><p>Missing values by field <span>· {{ "{:,}".format(profile.missing_total) }} total</span></p></div>
             <div class="coverage-panel">
                 {% for field, missing in critical_missing %}
-                <div class="coverage-row"><span class="field-name">{{ field|replace('_', ' ') }}</span><progress class="bar missing" max="{{ profile.count }}" value="{{ missing }}" aria-label="{{ field }}: {{ missing }} missing of {{ profile.count }}"></progress><span class="coverage-value">{{ "%.1f"|format(missing / profile.count * 100) }}<small>%</small></span><span class="coverage-count">{{ "{:,}".format(missing) }} missing</span></div>
+                <div class="coverage-row"><span class="field-name">{{ field|replace('_', ' ') }}</span><progress class="bar missing" max="{{ profile.count or 1 }}" value="{{ missing }}" aria-label="{{ field }}: {{ missing }} missing of {{ profile.count }}"></progress><span class="coverage-value">{% if profile.count %}{{ "%.1f"|format(missing / profile.count * 100) }}<small>%</small>{% else %}—{% endif %}</span><span class="coverage-count">{{ "{:,}".format(missing) }} missing</span></div>
                 {% endfor %}
                 <p class="chart-note">Bars show missing share. Empty seasons and certifications are field gaps, not automatically bad records.</p>
             </div>
@@ -62,6 +62,7 @@
                     {% for label, total in profile.types.items() %}
                     <div class="type-row"><span>{{ label|title }}</span><progress class="bar type" max="{{ type_total }}" value="{{ total }}" aria-label="{{ label }}: {{ total }} records"></progress><strong>{{ "{:,}".format(total) }}</strong><small>{{ (total / type_total * 100)|round|int }}%</small></div>
                     {% endfor %}
+                    {% if not profile.types %}<p class="chart-note">No source rows to classify yet.</p>{% endif %}
                 </div>
                 <div class="chart-divider"></div>
                 <h3>Most tagged genres <span>· multi-label</span></h3>
@@ -69,6 +70,7 @@
                     {% for label, total in profile.genres %}
                     <div class="genre-row"><span>{{ label }}</span><progress class="bar genre" max="{{ max_genre }}" value="{{ total }}" aria-label="{{ label }}: {{ total }} tags"></progress><strong>{{ "{:,}".format(total) }}</strong></div>
                     {% endfor %}
+                    {% if not profile.genres %}<p class="chart-note">No genre tags are available yet.</p>{% endif %}
                 </div>
                 <p class="chart-note">A title can have multiple genre tags. Values count tags, not unique records.</p>
             </article>
@@ -79,6 +81,7 @@
                     {% for decade, total in profile.decades %}
                     <div class="decade-row"><span>{{ decade }}s</span><progress class="bar decade" max="{{ max_decade }}" value="{{ total }}" aria-label="{{ decade }}s: {{ total }} records"></progress><strong>{{ "{:,}".format(total) }}</strong></div>
                     {% endfor %}
+                    {% if not profile.decades %}<p class="chart-note">Release-year data is unavailable for this snapshot.</p>{% endif %}
                 </div>
                 <p class="chart-note">Counts use the release year provided by the source. No inference is made for missing metadata.</p>
                 <div class="chart-divider"></div>
@@ -117,7 +120,7 @@
                 </table>
             </div>
             {% else %}
-            <div class="queue-empty"><strong>No flagged records match those filters.</strong><span>Try another issue type or search term. The source file is unchanged.</span></div>
+            <div class="queue-empty"><strong>{% if profile.count %}No flagged records match those filters.{% else %}No source rows are available to review.{% endif %}</strong><span>{% if profile.count %}Try another issue type or search term. The source file is unchanged.{% else %}Check that the catalog CSV contains data rows.{% endif %}</span></div>
             {% endif %}
             {% if review_pages > 1 %}<nav class="queue-pages" aria-label="Review queue pages">
                 {% if review_page > 1 %}<a href="{{ url_for('index', q=review_query, flag=review_flag, page=review_page - 1) }}">Previous page</a>{% else %}<span></span>{% endif %}
