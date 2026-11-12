@@ -2,9 +2,9 @@ import csv
 import io
 import tempfile
 import unittest
-from xml.etree import ElementTree
 from pathlib import Path
 from unittest.mock import patch
+from xml.etree import ElementTree
 
 from app import _clean_row, _profile, create_app
 
@@ -45,6 +45,8 @@ class QualityLabTests(unittest.TestCase):
         self.assertIn(b"1 blank title", response.data)
         self.assertIn(b"1 possible duplicate keys", response.data)
         self.assertIn(b"Most tagged genres", response.data)
+        self.assertIn(b'id="copy-review-page"', response.data)
+        self.assertIn(b'src="/static/review-queue.js"', response.data)
         self.assertNotIn(b"style=", response.data)
         self.assertEqual(response.headers["X-Frame-Options"], "DENY")
         self.assertIn("default-src 'self'", response.headers["Content-Security-Policy"])
@@ -90,7 +92,17 @@ class QualityLabTests(unittest.TestCase):
         endpoints = {rule.endpoint for rule in app.url_map.iter_rules()}
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'href="/static/styles.css"', response.data)
+        self.assertIn(b'src="/static/review-queue.js"', response.data)
+        self.assertTrue((Path(__file__).resolve().parents[1] / "public" / "static" / "review-queue.js").is_file())
         self.assertNotIn("static", endpoints)
+
+    def test_review_queue_module_is_served_as_javascript(self):
+        with patch.dict("os.environ", {"VERCEL": ""}):
+            app = create_app({"TESTING": True, "TITLES_CSV": str(self.titles)})
+        response = app.test_client().get("/static/review-queue.js")
+        self.addCleanup(response.close)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("javascript", response.content_type)
 
     def test_review_queue_filters_and_exports_matching_rows(self):
         self.rows[2]["id"] = "one"

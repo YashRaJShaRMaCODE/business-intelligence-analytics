@@ -114,6 +114,8 @@
             </form>
             <p class="queue-count" role="status">{{ "{:,}".format(review_total) }} matching record{{ "s" if review_total != 1 else "" }} · page {{ review_page }} of {{ review_pages }}</p>
             {% if review_rows %}
+            <button class="queue-export" id="copy-review-page" type="button">Copy page references</button>
+            <p id="copy-review-status" class="queue-count" role="status" aria-live="polite"></p>
             <div class="queue-table-wrap" tabindex="0" aria-label="Flagged records; scroll horizontally to see all columns">
                 <table class="queue-table"><thead><tr><th scope="col">Source record</th><th scope="col">Record</th><th scope="col">Source ID</th><th scope="col">Type / year</th><th scope="col">Review flags</th></tr></thead>
                     <tbody>{% for row in review_rows %}<tr><td>{{ row.source_record }}</td><th scope="row">{{ row.title|trim or "Untitled record" }}</th><td>{{ row.id|trim or "—" }}</td><td>{{ row.type|trim or "—" }} / {{ row.release_year|trim or "—" }}</td><td>{% for issue in row.issues %}<span class="issue-tag">{{ issue }}</span>{% endfor %}</td></tr>{% endfor %}</tbody>
@@ -135,5 +137,6 @@
         </section>
     </main>
     <footer><span>CATALOG QUALITY LAB <span class="footer-sep">/</span> PERSONAL DATA PROJECT</span><a href="https://github.com/YashRaJShaRMaCODE/business-intelligence-analytics">SOURCE REPOSITORY ↗</a></footer>
+    <script type="module" src="/static/review-queue.js"></script>
 </body>
 </html>
