@@ -11,7 +11,7 @@ This is an independent portfolio project. It does not connect to Netflix or anot
 - Profiles the 15 source fields and shows how many cells are blank.
 - Breaks down movies, shows, genre tags, release decades, and IMDb rating coverage.
 - Flags blank titles, repeated IDs, and repeated normalized title/type/year keys for human review.
-- Adds a paged review queue for blank titles, repeated IDs, possible duplicates, malformed years, and out-of-range rating scores. Search by title, ID, type, year, or description; filter by issue and export the matching rows.
+- Adds a paged review queue for blank titles, repeated IDs, possible duplicates, malformed years, and out-of-range rating scores. Search by title, ID, type, year, or description; filter by issue and export matching rows with their source-record numbers for reliable lookup in the original CSV.
 - Downloads a UTF-8 cleaned CSV. Rows with no title are excluded; genre tags are normalized; missing values remain blank; spreadsheet formula prefixes are escaped. Similar-title records are never silently removed.
 - Serves a lightweight `/healthz` endpoint for deployment checks.
 - Publishes a canonical page URL, Open Graph sharing metadata, `robots.txt`, and a one-page sitemap.

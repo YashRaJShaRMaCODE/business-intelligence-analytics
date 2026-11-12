@@ -105,12 +105,14 @@ class QualityLabTests(unittest.TestCase):
         self.assertEqual(page.status_code, 200)
         self.assertIn(b"2 matching records", page.data)
         self.assertIn(b"Possible duplicate key", page.data)
+        self.assertIn(b"Source record", page.data)
         self.assertNotIn(b"Sea Archive", page.data)
 
         export = self.client.get("/download/review.csv?flag=repeated_id")
         rows = list(csv.DictReader(io.StringIO(export.data.decode("utf-8-sig"))))
         self.assertEqual(len(rows), 2)
         self.assertTrue(all("Repeated source ID" in row["review_flags"] for row in rows))
+        self.assertEqual([row["source_record"] for row in rows], ["1", "3"])
 
     def test_review_queue_handles_no_matches_and_invalid_filters(self):
         empty = self.client.get("/?q=not-a-real-title&flag=invalid_score")

@@ -42,7 +42,7 @@ def _read_dataset(path):
         reader = csv.DictReader(source)
         if not reader.fieldnames or not set(FIELDS).issubset(reader.fieldnames):
             raise ValueError("The catalog file is missing required columns.")
-        return list(reader)
+        return [{"_source_record": number, **row} for number, row in enumerate(reader, start=1)]
 
 
 def _profile(rows):
@@ -123,7 +123,8 @@ def _review_rows(rows):
             if (row.get(field) or "").strip() and (score is None or not 0 <= score <= 10):
                 issues.append(("invalid_score", f"Invalid {field.replace('_', ' ')}"))
         if issues:
-            results.append({**row, "issue_codes": [code for code, _ in issues], "issues": [label for _, label in issues]})
+            results.append({**row, "source_record": row.get("_source_record"),
+                            "issue_codes": [code for code, _ in issues], "issues": [label for _, label in issues]})
     return results
 
 
@@ -208,10 +209,11 @@ def create_app(test_config=None):
         query = request.args.get("q", "").strip()[:100]
         selected, _ = _matching_reviews(review_rows, query, request.args.get("flag", "any"))
         output = io.StringIO(newline="")
-        writer = csv.DictWriter(output, fieldnames=(*FIELDS, "review_flags"))
+        writer = csv.DictWriter(output, fieldnames=(*FIELDS, "source_record", "review_flags"))
         writer.writeheader()
         for row in selected:
             cleaned = _clean_row(row)
+            cleaned["source_record"] = row["source_record"]
             cleaned["review_flags"] = "; ".join(row["issues"])
             writer.writerow(cleaned)
         return send_file(

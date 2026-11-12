@@ -115,8 +115,8 @@
             <p class="queue-count" role="status">{{ "{:,}".format(review_total) }} matching record{{ "s" if review_total != 1 else "" }} · page {{ review_page }} of {{ review_pages }}</p>
             {% if review_rows %}
             <div class="queue-table-wrap" tabindex="0" aria-label="Flagged records; scroll horizontally to see all columns">
-                <table class="queue-table"><thead><tr><th scope="col">Record</th><th scope="col">Source ID</th><th scope="col">Type / year</th><th scope="col">Review flags</th></tr></thead>
-                    <tbody>{% for row in review_rows %}<tr><th scope="row">{{ row.title|trim or "Untitled record" }}</th><td>{{ row.id|trim or "—" }}</td><td>{{ row.type|trim or "—" }} / {{ row.release_year|trim or "—" }}</td><td>{% for issue in row.issues %}<span class="issue-tag">{{ issue }}</span>{% endfor %}</td></tr>{% endfor %}</tbody>
+                <table class="queue-table"><thead><tr><th scope="col">Source record</th><th scope="col">Record</th><th scope="col">Source ID</th><th scope="col">Type / year</th><th scope="col">Review flags</th></tr></thead>
+                    <tbody>{% for row in review_rows %}<tr><td>{{ row.source_record }}</td><th scope="row">{{ row.title|trim or "Untitled record" }}</th><td>{{ row.id|trim or "—" }}</td><td>{{ row.type|trim or "—" }} / {{ row.release_year|trim or "—" }}</td><td>{% for issue in row.issues %}<span class="issue-tag">{{ issue }}</span>{% endfor %}</td></tr>{% endfor %}</tbody>
                 </table>
             </div>
             {% else %}
