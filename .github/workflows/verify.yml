@@ -27,7 +27,7 @@ jobs:
         run: |
           python -m unittest discover -s tests -v
           python -m compileall -q app.py tests
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "24"
       - name: Test review queue export
