@@ -6,7 +6,7 @@ from xml.etree import ElementTree
 from pathlib import Path
 from unittest.mock import patch
 
-from app import _profile, create_app
+from app import _clean_row, _profile, create_app
 
 
 class QualityLabTests(unittest.TestCase):
@@ -71,6 +71,12 @@ class QualityLabTests(unittest.TestCase):
         self.assertEqual(rows[0]["genres"], "comedy; drama")
         self.assertEqual(rows[-1]["title"], "'=2+2")
         self.assertEqual(rows[0]["imdb_score"], "8.2")
+
+    def test_clean_export_escapes_formula_prefixes_in_ids_and_types(self):
+        row = self.rows[0] | {"id": "=HYPERLINK(\"https://bad.example\")", "type": "+cmd|calc"}
+        cleaned = _clean_row(row)
+        self.assertEqual(cleaned["id"], "'=HYPERLINK(\"https://bad.example\")")
+        self.assertEqual(cleaned["type"], "'+CMD|CALC")
 
     def test_health_route_reports_loaded_snapshot(self):
         response = self.client.get("/healthz")

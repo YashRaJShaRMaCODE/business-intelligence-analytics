@@ -91,7 +91,7 @@ def _clean_row(row):
     for field in SCORE_FIELDS + ("tmdb_popularity",):
         value = _number(cleaned[field])
         cleaned[field] = str(value) if value is not None else ""
-    for field in ("title", "description", "age_certification", "genres", "production_countries", "imdb_id"):
+    for field in ("id", "title", "type", "description", "age_certification", "genres", "production_countries", "imdb_id"):
         if cleaned[field].lstrip().startswith(("=", "+", "-", "@", "\t", "\r")):
             cleaned[field] = "'" + cleaned[field]
     return cleaned
