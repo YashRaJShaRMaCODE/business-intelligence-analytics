@@ -17,6 +17,7 @@ FIELDS = (
     "imdb_score", "imdb_votes", "tmdb_popularity", "tmdb_score",
 )
 SCORE_FIELDS = ("imdb_score", "tmdb_score")
+INTEGER_FIELDS = ("runtime", "seasons", "imdb_votes")
 
 
 def _number(value):
@@ -116,27 +117,56 @@ def _review_rows(rows):
             issues.append(("repeated_id", "Repeated source ID"))
         if title and keys[key] > 1:
             issues.append(("possible_duplicate", "Possible duplicate key"))
-        if year and not year.isdigit():
+        if not year:
+            issues.append(("missing_year", "Missing release year"))
+        elif not year.isdigit():
             issues.append(("invalid_year", "Invalid release year"))
         for field in SCORE_FIELDS:
             score = _number(row.get(field))
             if (row.get(field) or "").strip() and (score is None or not 0 <= score <= 10):
                 issues.append(("invalid_score", f"Invalid {field.replace('_', ' ')}"))
+        for field in INTEGER_FIELDS:
+            value = (row.get(field) or "").strip()
+            try:
+                invalid = value and (not value.isdigit() or int(value) < (1 if field in ("runtime", "seasons") else 0))
+            except ValueError:
+                invalid = bool(value)
+            if invalid:
+                issues.append(("invalid_numeric", f"Invalid {field.replace('_', ' ')}"))
+        popularity = (row.get("tmdb_popularity") or "").strip()
+        popularity_value = _number(popularity)
+        if popularity and (popularity_value is None or popularity_value < 0):
+            issues.append(("invalid_numeric", "Invalid tmdb popularity"))
         if issues:
             results.append({**row, "source_record": row.get("_source_record"),
                             "issue_codes": [code for code, _ in issues], "issues": [label for _, label in issues]})
     return results
 
 
-def _matching_reviews(rows, query, flag):
-    allowed = {"any", "missing_title", "repeated_id", "possible_duplicate", "invalid_year", "invalid_score"}
+def _matching_reviews(rows, query, flag, media_type="any"):
+    allowed = {"any", "missing_title", "missing_year", "repeated_id", "possible_duplicate", "invalid_year", "invalid_score", "invalid_numeric"}
     flag = flag if flag in allowed else "any"
+    media_type = media_type if media_type in {"any", "MOVIE", "SHOW"} else "any"
     term = query.casefold()
     return [
         row for row in rows
         if (flag == "any" or flag in row["issue_codes"])
-        and (not term or term in " ".join(str(row.get(key) or "") for key in ("title", "id", "type", "release_year", "description")).casefold())
+        and (media_type == "any" or (row.get("type") or "").strip().upper() == media_type)
+        and (not term or term in " ".join(str(row.get(field) or "") for field in FIELDS).casefold())
     ], flag
+
+
+def _sort_reviews(rows, order):
+    allowed = {"source", "title", "year", "imdb_score"}
+    order = order if order in allowed else "source"
+    source_record = lambda row: int(row["source_record"])
+    keys = {
+        "source": lambda row: (source_record(row),),
+        "title": lambda row: ((row.get("title") or "").strip().casefold(), source_record(row)),
+        "year": lambda row: (int(row["release_year"]) if (row.get("release_year") or "").isdigit() else math.inf, source_record(row)),
+        "imdb_score": lambda row: (_number(row.get("imdb_score")) if _number(row.get("imdb_score")) is not None else math.inf, source_record(row)),
+    }
+    return sorted(rows, key=keys[order]), order
 
 
 def create_app(test_config=None):
@@ -151,6 +181,7 @@ def create_app(test_config=None):
     rows = _read_dataset(app.config["TITLES_CSV"])
     profile = _profile(rows)
     review_rows = _review_rows(rows)
+    review_issue_counts = Counter(code for row in review_rows for code in row["issue_codes"])
 
     @app.after_request
     def security_headers(response):
@@ -167,7 +198,9 @@ def create_app(test_config=None):
         max_genre = max((value for _, value in profile["genres"]), default=1)
         max_decade = max((value for _, value in profile["decades"]), default=1)
         query = request.args.get("q", "").strip()[:100]
-        matches, flag = _matching_reviews(review_rows, query, request.args.get("flag", "any"))
+        media_type = request.args.get("type", "any").upper()
+        matches, flag = _matching_reviews(review_rows, query, request.args.get("flag", "any"), media_type)
+        matches, sort_by = _sort_reviews(matches, request.args.get("sort", "source"))
         page_size = 15
         page_count = max(1, math.ceil(len(matches) / page_size))
         page = min(max(1, request.args.get("page", 1, type=int) or 1), page_count)
@@ -177,6 +210,8 @@ def create_app(test_config=None):
             critical_missing=sorted(profile["missing"].items(), key=lambda item: item[1], reverse=True)[:6],
             review_rows=matches[(page - 1) * page_size:page * page_size], review_query=query,
             review_flag=flag, review_total=len(matches), review_page=page, review_pages=page_count,
+            review_type=media_type if media_type in {"any", "MOVIE", "SHOW"} else "any",
+            review_sort=sort_by, review_issue_counts=review_issue_counts,
             public_url=f'{app.config["PUBLIC_BASE_URL"]}/',
         )
 
@@ -207,7 +242,10 @@ def create_app(test_config=None):
     @app.get("/download/review.csv")
     def download_review():
         query = request.args.get("q", "").strip()[:100]
-        selected, _ = _matching_reviews(review_rows, query, request.args.get("flag", "any"))
+        selected, _ = _matching_reviews(
+            review_rows, query, request.args.get("flag", "any"), request.args.get("type", "any").upper(),
+        )
+        selected, _ = _sort_reviews(selected, request.args.get("sort", "source"))
         output = io.StringIO(newline="")
         writer = csv.DictWriter(output, fieldnames=(*FIELDS, "source_record", "review_flags"))
         writer.writeheader()

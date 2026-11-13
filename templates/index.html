@@ -92,22 +92,40 @@
         <section class="review-section" aria-labelledby="review-title">
             <div><p class="eyebrow">05 / REVIEW QUEUE</p><h2 id="review-title">Flags for a human pass.</h2><p class="review-intro">Signals identify records worth checking; they do not prove a source error.</p></div>
             <div class="flag-grid">
-                <article class="flag"><span class="flag-number">A</span><strong>{{ profile.missing['title'] }} blank title</strong><p>Excluded from the cleaned download because a title is needed to identify the row.</p></article>
-                <article class="flag"><span class="flag-number">B</span><strong>{{ profile.duplicate_ids }} repeated IDs</strong><p>Same source ID appears more than once. Review before joining this file to other tables.</p></article>
-                <article class="flag"><span class="flag-number">C</span><strong>{{ profile.possible_duplicates }} possible duplicate keys</strong><p>Repeated normalized title + type + year combinations. Similar titles may still be legitimate.</p></article>
+                {% for code, letter, label, description in [
+                    ("missing_title", "A", "blank titles", "Excluded from the cleaned download because a title is needed to identify the row."),
+                    ("missing_year", "B", "missing release years", "Find catalog rows with no year available for analysis."),
+                    ("repeated_id", "C", "repeated source IDs", "Review before joining this file to other tables."),
+                    ("possible_duplicate", "D", "records with possible duplicate keys", "Repeated normalized title + type + year combinations; similar titles may still be legitimate."),
+                    ("invalid_year", "E", "malformed release years", "Check year values that cannot be read as numbers."),
+                    ("invalid_score", "F", "invalid rating scores", "Review non-numeric scores and values outside the 0–10 range."),
+                    ("invalid_numeric", "G", "invalid numeric metadata", "Review runtime, seasons, vote counts, and popularity values.")
+                ] %}
+                <article class="flag"><span class="flag-number">{{ letter }}</span><strong><a href="{{ url_for('index', flag=code) }}#queue-title">{{ review_issue_counts[code] }} {{ label }}</a></strong><p>{{ description }}</p></article>
+                {% endfor %}
             </div>
         </section>
 
         <section class="audit-queue" aria-labelledby="queue-title">
             <div class="queue-heading">
                 <div><p class="eyebrow">06 / RECORD REVIEW</p><h2 id="queue-title">Go from signal to source row.</h2><p>Search the flagged records, narrow the issue type, then export the matching rows for a closer pass.</p></div>
-                <a class="queue-export" href="{{ url_for('download_review', q=review_query, flag=review_flag) }}">Export {{ "{:,}".format(review_total) }} rows</a>
+                <a class="queue-export" href="{{ url_for('download_review', q=review_query, flag=review_flag, type=review_type, sort=review_sort) }}">Export {{ "{:,}".format(review_total) }} rows</a>
             </div>
             <form class="queue-filters" method="get" action="/" role="search">
-                <label>Search records<input type="search" name="q" value="{{ review_query }}" maxlength="100" placeholder="Title, ID, year, or notes"></label>
+                <label>Search all catalog fields<input type="search" name="q" value="{{ review_query }}" maxlength="100" placeholder="Title, ID, genre, country, score…"></label>
                 <label>Issue type<select name="flag">
-                    {% for value, label in [("any", "All flags"), ("missing_title", "Blank title"), ("repeated_id", "Repeated source ID"), ("possible_duplicate", "Possible duplicate key"), ("invalid_year", "Invalid release year"), ("invalid_score", "Invalid rating score")] %}
+                    {% for value, label in [("any", "All flags"), ("missing_title", "Blank title"), ("missing_year", "Missing release year"), ("repeated_id", "Repeated source ID"), ("possible_duplicate", "Possible duplicate key"), ("invalid_year", "Invalid release year"), ("invalid_score", "Invalid rating score"), ("invalid_numeric", "Invalid numeric metadata")] %}
                     <option value="{{ value }}" {{ "selected" if review_flag == value else "" }}>{{ label }}</option>
+                    {% endfor %}
+                </select></label>
+                <label>Catalog type<select name="type">
+                    {% for value, label in [("any", "Movies + shows"), ("MOVIE", "Movies"), ("SHOW", "Shows")] %}
+                    <option value="{{ value }}" {{ "selected" if review_type == value else "" }}>{{ label }}</option>
+                    {% endfor %}
+                </select></label>
+                <label>Sort results<select name="sort">
+                    {% for value, label in [("source", "Source order"), ("title", "Title A–Z"), ("year", "Year oldest first"), ("imdb_score", "IMDb score low first")] %}
+                    <option value="{{ value }}" {{ "selected" if review_sort == value else "" }}>{{ label }}</option>
                     {% endfor %}
                 </select></label>
                 <button type="submit">Apply filters</button>
@@ -117,17 +135,21 @@
             <button class="queue-export" id="copy-review-page" type="button">Copy page references</button>
             <p id="copy-review-status" class="queue-count" role="status" aria-live="polite"></p>
             <div class="queue-table-wrap" tabindex="0" aria-label="Flagged records; scroll horizontally to see all columns">
-                <table class="queue-table"><thead><tr><th scope="col">Source record</th><th scope="col">Record</th><th scope="col">Source ID</th><th scope="col">Type / year</th><th scope="col">Review flags</th></tr></thead>
-                    <tbody>{% for row in review_rows %}<tr><td>{{ row.source_record }}</td><th scope="row">{{ row.title|trim or "Untitled record" }}</th><td>{{ row.id|trim or "—" }}</td><td>{{ row.type|trim or "—" }} / {{ row.release_year|trim or "—" }}</td><td>{% for issue in row.issues %}<span class="issue-tag">{{ issue }}</span>{% endfor %}</td></tr>{% endfor %}</tbody>
+                <table class="queue-table"><thead><tr><th scope="col">Source record</th><th scope="col">Record</th><th scope="col">Source ID</th><th scope="col">Type / year</th><th scope="col">Review flags</th><th scope="col">Source evidence</th></tr></thead>
+                    <tbody>{% for row in review_rows %}<tr><td>{{ row.source_record }}</td><th scope="row">{{ row.title|trim or "Untitled record" }}</th><td>{{ row.id|trim or "—" }}</td><td>{{ row.type|trim or "—" }} / {{ row.release_year|trim or "—" }}</td><td>{% for issue in row.issues %}<span class="issue-tag">{{ issue }}</span>{% endfor %}</td><td><details><summary>Inspect values</summary><dl>
+                        {% for field, label in [("description", "Description"), ("genres", "Genres"), ("runtime", "Runtime"), ("seasons", "Seasons"), ("imdb_score", "IMDb score"), ("imdb_votes", "IMDb votes"), ("tmdb_popularity", "TMDb popularity"), ("tmdb_score", "TMDb score")] %}
+                        <dt>{{ label }}</dt><dd>{{ row.get(field)|trim or "—" }}</dd>
+                        {% endfor %}
+                    </dl></details></td></tr>{% endfor %}</tbody>
                 </table>
             </div>
             {% else %}
             <div class="queue-empty"><strong>{% if profile.count %}No flagged records match those filters.{% else %}No source rows are available to review.{% endif %}</strong><span>{% if profile.count %}Try another issue type or search term. The source file is unchanged.{% else %}Check that the catalog CSV contains data rows.{% endif %}</span></div>
             {% endif %}
             {% if review_pages > 1 %}<nav class="queue-pages" aria-label="Review queue pages">
-                {% if review_page > 1 %}<a href="{{ url_for('index', q=review_query, flag=review_flag, page=review_page - 1) }}">Previous page</a>{% else %}<span></span>{% endif %}
+                {% if review_page > 1 %}<a href="{{ url_for('index', q=review_query, flag=review_flag, type=review_type, sort=review_sort, page=review_page - 1) }}">Previous page</a>{% else %}<span></span>{% endif %}
                 <span>{{ review_page }} / {{ review_pages }}</span>
-                {% if review_page < review_pages %}<a href="{{ url_for('index', q=review_query, flag=review_flag, page=review_page + 1) }}">Next page</a>{% else %}<span></span>{% endif %}
+                {% if review_page < review_pages %}<a href="{{ url_for('index', q=review_query, flag=review_flag, type=review_type, sort=review_sort, page=review_page + 1) }}">Next page</a>{% else %}<span></span>{% endif %}
             </nav>{% endif %}
         </section>
 

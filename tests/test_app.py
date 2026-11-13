@@ -43,8 +43,10 @@ class QualityLabTests(unittest.TestCase):
         self.assertIn(b'property="og:type" content="website"', response.data)
         self.assertIn(b"4 titled rows", response.data)
         self.assertIn(b"1 blank title", response.data)
-        self.assertIn(b"1 possible duplicate keys", response.data)
+        self.assertIn(b"2 records with possible duplicate keys", response.data)
         self.assertIn(b"Most tagged genres", response.data)
+        self.assertIn(b'href="/?flag=missing_title#queue-title"', response.data)
+        self.assertIn(b'href="/?flag=invalid_numeric#queue-title"', response.data)
         self.assertIn(b'id="copy-review-page"', response.data)
         self.assertIn(b'src="/static/review-queue.js"', response.data)
         self.assertNotIn(b"style=", response.data)
@@ -139,6 +141,88 @@ class QualityLabTests(unittest.TestCase):
         score = self.client.get("/?flag=invalid_score")
         self.assertIn(b"Invalid imdb score", score.data)
         self.assertIn(b"Invalid tmdb score", score.data)
+
+    def test_review_queue_searches_all_fields_and_filters_catalog_type(self):
+        self.rows[1]["release_year"] = ""
+        self.rows[3]["imdb_id"] = "tt-searchable"
+        with self.titles.open("w", encoding="latin1", newline="") as file:
+            writer = csv.DictWriter(file, fieldnames=self.fields)
+            writer.writeheader()
+            writer.writerows(self.rows)
+        self.app = create_app({"TESTING": True, "TITLES_CSV": str(self.titles)})
+        self.client = self.app.test_client()
+
+        page = self.client.get("/?q=tt-searchable&flag=missing_title")
+        self.assertIn(b"Untitled record", page.data)
+        self.assertIn(b"tt-searchable", page.data)
+
+        page = self.client.get("/?flag=missing_year&type=SHOW")
+        self.assertIn(b"Sea Archive", page.data)
+        self.assertNotIn(b"Sea of Stories", page.data)
+        self.assertIn(b'name="type"', page.data)
+
+        export = self.client.get("/download/review.csv?flag=missing_year&type=SHOW")
+        rows = list(csv.DictReader(io.StringIO(export.data.decode("utf-8-sig"))))
+        self.assertEqual([row["title"] for row in rows], ["Sea Archive"])
+
+    def test_review_queue_flags_invalid_numeric_metadata(self):
+        self.rows[0].update(runtime="-1", seasons="1.5", imdb_votes="many", tmdb_popularity="-0.1")
+        with self.titles.open("w", encoding="latin1", newline="") as file:
+            writer = csv.DictWriter(file, fieldnames=self.fields)
+            writer.writeheader()
+            writer.writerows(self.rows)
+        self.app = create_app({"TESTING": True, "TITLES_CSV": str(self.titles)})
+        self.client = self.app.test_client()
+
+        page = self.client.get("/?flag=invalid_numeric")
+        for label in ("Invalid runtime", "Invalid seasons", "Invalid imdb votes", "Invalid tmdb popularity"):
+            self.assertIn(label.encode(), page.data)
+        self.assertIn(b"-0.1", page.data)
+
+        export = self.client.get("/download/review.csv?flag=invalid_numeric")
+        rows = list(csv.DictReader(io.StringIO(export.data.decode("utf-8-sig"))))
+        self.assertIn("Invalid runtime", rows[0]["review_flags"])
+        self.assertIn("Invalid seasons", rows[0]["review_flags"])
+        self.assertIn("Invalid imdb votes", rows[0]["review_flags"])
+        self.assertIn("Invalid tmdb popularity", rows[0]["review_flags"])
+
+    def test_review_queue_sort_order_applies_to_page_and_export(self):
+        self.rows[0]["release_year"] = ""
+        self.rows[1]["release_year"] = ""
+        with self.titles.open("w", encoding="latin1", newline="") as file:
+            writer = csv.DictWriter(file, fieldnames=self.fields)
+            writer.writeheader()
+            writer.writerows(self.rows)
+        self.app = create_app({"TESTING": True, "TITLES_CSV": str(self.titles)})
+        self.client = self.app.test_client()
+
+        page = self.client.get("/?flag=missing_year&sort=title")
+        self.assertIn(b'value="title" selected', page.data)
+        self.assertIn(b"Inspect values", page.data)
+        self.assertLess(page.data.index(b"Sea Archive"), page.data.index(b"Sea of Stories"))
+
+        export = self.client.get("/download/review.csv?flag=missing_year&sort=title")
+        rows = list(csv.DictReader(io.StringIO(export.data.decode("utf-8-sig"))))
+        self.assertEqual([row["title"] for row in rows], ["Sea Archive", "Sea of Stories"])
+
+    def test_review_queue_filters_and_exports_missing_release_years(self):
+        self.rows[0]["release_year"] = ""
+        with self.titles.open("w", encoding="latin1", newline="") as file:
+            writer = csv.DictWriter(file, fieldnames=self.fields)
+            writer.writeheader()
+            writer.writerows(self.rows)
+        self.app = create_app({"TESTING": True, "TITLES_CSV": str(self.titles)})
+        self.client = self.app.test_client()
+
+        page = self.client.get("/?flag=missing_year")
+        self.assertIn(b"Missing release year", page.data)
+        self.assertIn(b"Sea of Stories", page.data)
+        self.assertNotIn(b"Sea Archive", page.data)
+
+        export = self.client.get("/download/review.csv?flag=missing_year")
+        rows = list(csv.DictReader(io.StringIO(export.data.decode("utf-8-sig"))))
+        self.assertEqual([row["source_record"] for row in rows], ["1"])
+        self.assertEqual(rows[0]["review_flags"], "Missing release year")
 
     def test_blank_source_ids_are_not_counted_as_repeated_ids(self):
         self.assertEqual(_profile([{"id": "", "title": "One"}, {"id": "", "title": "Two"}])["duplicate_ids"], 0)
