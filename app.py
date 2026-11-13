@@ -1,5 +1,6 @@
 import ast
 import csv
+import hashlib
 import io
 import math
 import os
@@ -178,7 +179,9 @@ def create_app(test_config=None):
     )
     if test_config:
         app.config.update(test_config)
-    rows = _read_dataset(app.config["TITLES_CSV"])
+    dataset_path = Path(app.config["TITLES_CSV"])
+    rows = _read_dataset(dataset_path)
+    review_version = hashlib.sha256(dataset_path.read_bytes()).hexdigest()[:16]
     profile = _profile(rows)
     review_rows = _review_rows(rows)
     review_issue_counts = Counter(code for row in review_rows for code in row["issue_codes"])
@@ -212,6 +215,7 @@ def create_app(test_config=None):
             review_flag=flag, review_total=len(matches), review_page=page, review_pages=page_count,
             review_type=media_type if media_type in {"any", "MOVIE", "SHOW"} else "any",
             review_sort=sort_by, review_issue_counts=review_issue_counts,
+            review_version=review_version,
             public_url=f'{app.config["PUBLIC_BASE_URL"]}/',
         )
 

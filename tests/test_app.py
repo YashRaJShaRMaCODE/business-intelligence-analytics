@@ -48,6 +48,9 @@ class QualityLabTests(unittest.TestCase):
         self.assertIn(b'href="/?flag=missing_title#queue-title"', response.data)
         self.assertIn(b'href="/?flag=invalid_numeric#queue-title"', response.data)
         self.assertIn(b'id="copy-review-page"', response.data)
+        self.assertIn(b'id="review-decision-filter"', response.data)
+        self.assertIn(b'id="export-review-decisions"', response.data)
+        self.assertIn(b'data-review-version="', response.data)
         self.assertIn(b'src="/static/review-queue.js"', response.data)
         self.assertNotIn(b"style=", response.data)
         self.assertEqual(response.headers["X-Frame-Options"], "DENY")
@@ -105,6 +108,16 @@ class QualityLabTests(unittest.TestCase):
         self.addCleanup(response.close)
         self.assertEqual(response.status_code, 200)
         self.assertIn("javascript", response.content_type)
+
+    def test_review_state_module_is_served_as_javascript(self):
+        with patch.dict("os.environ", {"VERCEL": ""}):
+            app = create_app({"TESTING": True, "TITLES_CSV": str(self.titles)})
+        response = app.test_client().get("/static/review-state.mjs")
+
+        self.addCleanup(response.close)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("javascript", response.content_type)
+        self.assertIn(b"reviewDecisionExport", response.data)
 
     def test_review_queue_filters_and_exports_matching_rows(self):
         self.rows[2]["id"] = "one"

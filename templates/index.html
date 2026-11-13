@@ -15,7 +15,7 @@
     <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/static/styles.css">
 </head>
-<body>
+<body data-review-version="{{ review_version }}">
     <header class="topbar">
         <a class="brand" href="/" aria-label="Catalog Quality Lab home"><span class="brand-icon">CQ</span><span>CATALOG QUALITY LAB<small>OPEN DATA / FIELD NOTES 001</small></span></a>
         <a class="source-link" href="#method">Method &amp; limits <span aria-hidden="true">↗</span></a>
@@ -134,15 +134,34 @@
             {% if review_rows %}
             <button class="queue-export" id="copy-review-page" type="button">Copy page references</button>
             <p id="copy-review-status" class="queue-count" role="status" aria-live="polite"></p>
+            <div class="review-workbench" aria-label="Private review decisions on this device">
+                <label>Filter this page by decision<select id="review-decision-filter">
+                    <option value="any">All decisions</option>
+                    <option value="open">Not reviewed</option>
+                    <option value="reviewed">Reviewed</option>
+                    <option value="corrected">Source corrected</option>
+                    <option value="source_check">Needs source check</option>
+                </select></label>
+                <p id="review-decision-summary" class="queue-count" role="status" aria-live="polite"></p>
+                <div class="review-batch-actions">
+                    <button type="button" data-set-review="reviewed">Mark visible reviewed</button>
+                    <button type="button" data-set-review="source_check">Mark visible for source check</button>
+                    <button type="button" data-set-review="open">Reopen visible decisions</button>
+                    <button type="button" id="export-review-decisions">Export page decisions</button>
+                    <button type="button" id="clear-review-decisions">Clear saved decisions</button>
+                </div>
+                <p id="review-decision-status" class="queue-count" role="status" aria-live="polite">Decisions stay in this browser and never change the source file.</p>
+            </div>
             <div class="queue-table-wrap" tabindex="0" aria-label="Flagged records; scroll horizontally to see all columns">
-                <table class="queue-table"><thead><tr><th scope="col">Source record</th><th scope="col">Record</th><th scope="col">Source ID</th><th scope="col">Type / year</th><th scope="col">Review flags</th><th scope="col">Source evidence</th></tr></thead>
-                    <tbody>{% for row in review_rows %}<tr><td>{{ row.source_record }}</td><th scope="row">{{ row.title|trim or "Untitled record" }}</th><td>{{ row.id|trim or "—" }}</td><td>{{ row.type|trim or "—" }} / {{ row.release_year|trim or "—" }}</td><td>{% for issue in row.issues %}<span class="issue-tag">{{ issue }}</span>{% endfor %}</td><td><details><summary>Inspect values</summary><dl>
+                <table class="queue-table"><thead><tr><th scope="col">Source record</th><th scope="col">Record</th><th scope="col">Source ID</th><th scope="col">Type / year</th><th scope="col">Review flags</th><th scope="col">Source evidence</th><th scope="col">Your decision</th></tr></thead>
+                    <tbody>{% for row in review_rows %}<tr data-review-key="{{ row.source_record }}:{{ row.id|trim }}:{{ row.type|trim }}:{{ row.release_year|trim }}:{{ row.issue_codes|join(',') }}"><td>{{ row.source_record }}</td><th scope="row">{{ row.title|trim or "Untitled record" }}</th><td>{{ row.id|trim or "—" }}</td><td>{{ row.type|trim or "—" }} / {{ row.release_year|trim or "—" }}</td><td>{% for issue in row.issues %}<span class="issue-tag">{{ issue }}</span>{% endfor %}</td><td><details><summary>Inspect values</summary><dl>
                         {% for field, label in [("description", "Description"), ("genres", "Genres"), ("runtime", "Runtime"), ("seasons", "Seasons"), ("imdb_score", "IMDb score"), ("imdb_votes", "IMDb votes"), ("tmdb_popularity", "TMDb popularity"), ("tmdb_score", "TMDb score")] %}
                         <dt>{{ label }}</dt><dd>{{ row.get(field)|trim or "—" }}</dd>
                         {% endfor %}
-                    </dl></details></td></tr>{% endfor %}</tbody>
+                    </dl></details></td><td><label class="sr-only" for="decision-{{ row.source_record }}">Decision for source record {{ row.source_record }}</label><select class="review-decision" id="decision-{{ row.source_record }}"><option value="open">Not reviewed</option><option value="reviewed">Reviewed</option><option value="corrected">Source corrected</option><option value="source_check">Needs source check</option></select></td></tr>{% endfor %}</tbody>
                 </table>
             </div>
+            <p id="review-decision-empty" class="queue-count" role="status" hidden>No rows on this page match that decision filter.</p>
             {% else %}
             <div class="queue-empty"><strong>{% if profile.count %}No flagged records match those filters.{% else %}No source rows are available to review.{% endif %}</strong><span>{% if profile.count %}Try another issue type or search term. The source file is unchanged.{% else %}Check that the catalog CSV contains data rows.{% endif %}</span></div>
             {% endif %}

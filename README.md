@@ -12,6 +12,8 @@ This is an independent portfolio project. It does not connect to Netflix or anot
 - Breaks down movies, shows, genre tags, release decades, and IMDb rating coverage.
 - Flags blank titles, missing or malformed release years, repeated IDs, and repeated normalized title/type/year keys for human review.
 - Adds a paged review queue for blank titles or years, repeated IDs, possible duplicates, malformed years, out-of-range ratings, and invalid numeric metadata. Search across all catalog fields, filter by issue and movie/show type, sort by source order/title/year/IMDb score, inspect source values inline, copy the visible page's references as formula-safe TSV, or export the matching rows with source-record numbers for lookup in the original CSV. Dashboard issue counts link directly to their review filter.
+- Lets reviewers mark each visible record as not reviewed, reviewed, source corrected, or needing a source check. Filter and bulk-update the current page, see page progress, and export a JSON decision sheet for handoff.
+- Keeps review decisions in browser local storage under a key tied to the exact source snapshot. Decisions are not sent to the server, are cleared only on request, and never modify the bundled CSV. Exporting decisions includes public record references and statuses only; no free-text private notes are collected.
 - Downloads a UTF-8 cleaned CSV. Rows with no title are excluded; genre tags are normalized; missing values remain blank; spreadsheet formula prefixes are escaped. Similar-title records are never silently removed.
 - Serves a lightweight `/healthz` endpoint for deployment checks.
 - Publishes a canonical page URL, Open Graph sharing metadata, `robots.txt`, and a one-page sitemap.
@@ -45,8 +47,8 @@ python -m unittest discover -s tests
 python -m compileall -q app.py tests
 ```
 
-The tests use a temporary fixture CSV and do not modify the bundled dataset.
-GitHub Actions runs the tests, Python compilation, and a dependency security audit on pushes and pull requests to `main`.
+The tests use a temporary fixture CSV and do not modify the bundled dataset. Node tests cover decision validation, filtering, progress counts, bulk updates, and the public-field-only export.
+GitHub Actions runs the tests, Python compilation, review workflow tests, and a dependency security audit on pushes and pull requests to `main`.
 
 ## Data notes
 
